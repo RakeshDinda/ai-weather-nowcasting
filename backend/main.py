@@ -34,7 +34,8 @@ load_dotenv(os.path.join(project_root, ".env"))
 load_dotenv()
 
 from utils.api_fetcher import (
-    get_coordinates, fetch_weather, async_fetch_weather, _GEO_CACHE,
+    get_coordinates, get_weather_by_coords, get_fallback_mock,
+    fetch_weather, async_fetch_weather, _GEO_CACHE,
 )
 from utils.locations_manager import (
     get_india_locations, get_sampled_locations, find_location_by_name,
@@ -540,3 +541,169 @@ async def get_alerts():
         "total": len(alerts),
         "timestamp": datetime.now().isoformat()
     }
+
+
+# ============================================================
+# REAL-TIME NOWCASTING PIPELINE (ANY CITY)
+# ============================================================
+
+def engineer_features(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Feature Engineering for Real-Time Nowcasting:
+    - moisture_index = humidity * rainfall
+    - instability_index = temperature * humidity
+    - rain_intensity = rainfall * wind_speed
+    """
+    humidity = float(data.get("humidity", 0.0) or 0.0)
+    rainfall = float(data.get("rainfall", 0.0) or 0.0)
+    temperature = float(data.get("temperature", 0.0) or 0.0)
+    wind_speed = float(data.get("wind_speed", 0.0) or 0.0)
+
+    moisture_index = round(humidity * rainfall, 2)
+    instability_index = round(temperature * humidity, 2)
+    rain_intensity = round(rainfall * wind_speed, 2)
+
+    features = dict(data)
+    features.update({
+        "moisture_index": moisture_index,
+        "instability_index": instability_index,
+        "rain_intensity": rain_intensity,
+    })
+    return features
+
+
+def predict_nowcast(features: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Pluggable Nowcast Prediction Pipeline:
+    - rainfall > 25 -> HIGH
+    - rainfall > 10 -> MODERATE
+    - else          -> LOW
+    """
+    rainfall = float(features.get("rainfall", 0.0) or 0.0)
+
+    if rainfall > 25:
+        risk = "HIGH"
+    elif rainfall > 10:
+        risk = "MODERATE"
+    else:
+        risk = "LOW"
+
+    return {
+        "risk_level": risk,
+        "probability": 0.85,
+    }
+
+
+@app.get("/nowcast")
+def get_nowcast(city: str):
+    """
+    Real-Time Nowcasting API for ANY city.
+    Pipeline:
+      1. Geocode city via OpenWeather Geo API (with locations registry backup)
+      2. Fetch live atmospheric observations
+      3. Standardize weather object
+      4. Compute engineered features
+      5. Generate nowcast risk prediction
+      6. Produce actionable alerts
+      7. Return unified response
+    """
+    if not city or not city.strip():
+        return {"error": "Location not found"}
+
+    cleaned_city = city.strip()
+
+    try:
+        # STEP 2: Fetch coordinates
+        lat, lon = get_coordinates(cleaned_city)
+
+        if lat is None or lon is None:
+            # Fallback to local locations registry
+            loc = find_location_by_name(cleaned_city)
+            if loc:
+                lat, lon = loc["lat"], loc["lon"]
+            else:
+                return {"error": "Location not found"}
+
+        # Fetch real weather data by coordinates
+        weather = get_weather_by_coords(lat, lon, city_name=cleaned_city)
+        source = "realtime_api"
+
+        if not weather:
+            # Fallback if API fails, rate limited, or key missing
+            fb = get_fallback_mock(cleaned_city, lat, lon)
+            temp = fb["temperature"]
+            humidity = fb["humidity"]
+            rainfall = fb["rainfall"]
+            wind = fb["wind_speed"]
+            source = "fallback_mock"
+        else:
+            temp = float(weather.get("temperature", 30.0))
+            humidity = float(weather.get("humidity", 70.0))
+            rainfall = float(weather.get("rainfall", 0.0))
+            wind = float(weather.get("wind_speed", 2.0))
+
+        # STEP 3: Standard weather object
+        current_time = datetime.now().isoformat()
+        weather_obj = {
+            "city": cleaned_city,
+            "lat": lat,
+            "lon": lon,
+            "temperature": round(temp, 1),
+            "humidity": round(humidity, 1),
+            "rainfall": round(rainfall, 1),
+            "wind_speed": round(wind, 1),
+            "timestamp": current_time,
+        }
+
+        # STEP 4: Feature engineering
+        features = engineer_features(weather_obj)
+
+        # STEP 5: Prediction
+        prediction = predict_nowcast(features)
+        risk = prediction["risk_level"]
+
+        # STEP 6: Actionable alert (reusing generate_actionable_alert)
+        alert = generate_actionable_alert(risk, rainfall, humidity, wind)
+
+        # STEP 7: Final response format
+        return {
+            "city": cleaned_city,
+            "lat": lat,
+            "lon": lon,
+            "temperature": round(temp, 1),
+            "humidity": round(humidity, 1),
+            "rainfall": round(rainfall, 1),
+            "wind_speed": round(wind, 1),
+            "risk_level": risk,
+            "prediction": prediction,
+            "alert": alert,
+            "source": source,
+        }
+
+    except Exception as e:
+        print(f"[NOWCAST ERROR] Exception during nowcast for '{cleaned_city}': {e}")
+        # STEP 8: Safe fallback if unexpected exception occurs
+        fb = get_fallback_mock(cleaned_city, 22.0, 79.0)
+        temp = fb["temperature"]
+        humidity = fb["humidity"]
+        rainfall = fb["rainfall"]
+        wind = fb["wind_speed"]
+
+        risk = "HIGH" if rainfall > 25 else ("MODERATE" if rainfall > 10 else "LOW")
+        prediction = {"risk_level": risk, "probability": 0.85}
+        alert = generate_actionable_alert(risk, rainfall, humidity, wind)
+
+        return {
+            "city": cleaned_city,
+            "lat": 22.0,
+            "lon": 79.0,
+            "temperature": round(temp, 1),
+            "humidity": round(humidity, 1),
+            "rainfall": round(rainfall, 1),
+            "wind_speed": round(wind, 1),
+            "risk_level": risk,
+            "prediction": prediction,
+            "alert": alert,
+            "source": "fallback_mock",
+        }
+

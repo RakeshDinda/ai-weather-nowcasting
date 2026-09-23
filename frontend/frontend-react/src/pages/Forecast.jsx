@@ -22,7 +22,8 @@ import {
     AlertOctagon, 
     CheckCircle2, 
     Info,
-    Search
+    Search,
+    Loader2
 } from 'lucide-react';
 import TopHeader from '../components/TopHeader';
 
@@ -136,6 +137,14 @@ const Forecast = () => {
     const [hoveredPoint, setHoveredPoint] = useState(null);
     const [loading, setLoading] = useState(false);
 
+    // STEP 1: ADD NEW STATE (Real-time nowcasting from /nowcast API)
+    const [isRealtime, setIsRealtime] = useState(false);
+    const [realtimeData, setRealtimeData] = useState(null);
+    const [isSearching, setIsSearching] = useState(false);
+
+    // STEP 3: DATA SOURCE SWITCH
+    const activeData = isRealtime && realtimeData ? realtimeData : currentData;
+
     // 1. Search input state, dropdown suggestions & smart fallback message
     const [search, setSearch] = useState("");
     const [filteredNodes, setFilteredNodes] = useState([]);
@@ -146,6 +155,8 @@ const Forecast = () => {
     // 5. On select node handler
     const handleSelectNode = useCallback((nodeName) => {
         if (!nodeName || !citiesList.length) return;
+        setIsRealtime(false);
+        setRealtimeData(null);
         const matchingNode = citiesList.find(c => 
             (c.location && c.location.toLowerCase() === nodeName.toLowerCase()) ||
             (c.city && c.city.toLowerCase() === nodeName.toLowerCase()) ||
@@ -171,6 +182,8 @@ const Forecast = () => {
     // Backward-compatible select handler
     const handleCitySelect = useCallback((cityItem) => {
         if (!cityItem) return;
+        setIsRealtime(false);
+        setRealtimeData(null);
         const locName = cityItem.location || cityItem.city || cityItem.name;
         setCurrentData(cityItem);
         setTimelineHour(0);
@@ -265,10 +278,37 @@ const Forecast = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // 2. UPDATE SEARCH LOGIC (Exact match -> Smart fallback -> UI Message)
-    const handleSearchSubmit = useCallback((query) => {
+    // 2. MODIFY SEARCH HANDLER (Real-Time /nowcast -> Exact match -> Smart fallback -> UI Message)
+    const handleSearchSubmit = useCallback(async (query) => {
         const text = (typeof query === 'string' ? query : search)?.trim();
         if (!text) return;
+
+        setIsSearching(true);
+        setFallbackMessage("");
+
+        // STEP 2: Call real-time /nowcast API
+        try {
+            const res = await fetch(`http://127.0.0.1:8000/nowcast?city=${encodeURIComponent(text)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && !data.error && data.city) {
+                    setRealtimeData(data);
+                    setIsRealtime(true);
+                    setTimelineHour(0);
+                    setFallbackMessage("");
+                    setShowDropdown(false);
+                    setSearch(data.city);
+                    setIsSearching(false);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.warn("Real-time /nowcast fetch failed, falling back to node search:", err);
+        }
+
+        // STEP 2.3: If error or not found on /nowcast, fallback to existing node search (DO NOT REMOVE OLD LOGIC)
+        setIsRealtime(false);
+        setRealtimeData(null);
 
         // STEP 1: Try exact match
         const exactNode = citiesList.find(n =>
@@ -283,6 +323,7 @@ const Forecast = () => {
             setFallbackMessage("");
             setSearch(locName);
             setShowDropdown(false);
+            setIsSearching(false);
             try {
                 localStorage.setItem("selectedCity", locName);
                 localStorage.setItem("selected_city", locName);
@@ -329,6 +370,7 @@ const Forecast = () => {
                 "⚠ Exact location not found. Showing nearest available node: " + locName
             );
             setShowDropdown(false);
+            setIsSearching(false);
             try {
                 localStorage.setItem("selectedCity", locName);
                 localStorage.setItem("selected_city", locName);
@@ -339,18 +381,32 @@ const Forecast = () => {
         // STEP 3: If nothing matches:
         setFallbackMessage("No data available for this location.");
         setShowDropdown(false);
+        setIsSearching(false);
     }, [search, citiesList]);
 
-    // Active city's forecast array (0–4 hours)
+    // Active city's forecast array (0–4 hours) - STEP 4: Disabled for realtime
     const activeForecast = useMemo(() => {
-        if (Array.isArray(currentData?.forecast) && currentData.forecast.length >= 5) {
-            return currentData.forecast;
+        if (isRealtime) {
+            return [];
         }
-        return normalizeCityForecast(currentData);
-    }, [currentData]);
+        if (Array.isArray(activeData?.forecast) && activeData.forecast.length >= 5) {
+            return activeData.forecast;
+        }
+        return normalizeCityForecast(activeData);
+    }, [activeData, isRealtime]);
 
-    // 4. Timeline Slider (Core Nowcast): Read forecast[selectedHour]
+    // 4. Timeline Slider (Core Nowcast): Read forecast[selectedHour] or realtime telemetry
     const activeNowcast = useMemo(() => {
+        if (isRealtime && realtimeData) {
+            return {
+                hour: 0,
+                rainfall: Number(realtimeData.rainfall ?? 0),
+                humidity: Number(realtimeData.humidity ?? 70),
+                wind_speed: Number(realtimeData.wind_speed ?? 2),
+                temperature: Number(realtimeData.temperature ?? 28),
+                risk: (realtimeData.risk_level || realtimeData.risk || "LOW").toUpperCase()
+            };
+        }
         return activeForecast[timelineHour] || activeForecast[0] || {
             hour: 0,
             rainfall: 0,
@@ -359,7 +415,7 @@ const Forecast = () => {
             temperature: 28,
             risk: "LOW"
         };
-    }, [activeForecast, timelineHour]);
+    }, [isRealtime, realtimeData, activeForecast, timelineHour]);
 
     // Risk styling helper
     const getRiskBadge = (risk) => {
@@ -516,6 +572,15 @@ const Forecast = () => {
 
     // Dynamic Chart Statistics
     const chartStats = useMemo(() => {
+        if (!activeForecast.length) {
+            return {
+                peak: activeNowcast.rainfall,
+                baseline: activeNowcast.rainfall,
+                average: activeNowcast.rainfall,
+                diff: 0,
+                trajectoryText: "Live real-time observation"
+            };
+        }
         const rains = activeForecast.map(f => Number(f.rainfall) || 0);
         const peak = Math.max(...rains);
         const baseline = rains[0] ?? 0;
@@ -532,10 +597,23 @@ const Forecast = () => {
         }
 
         return { peak, baseline, average, diff, trajectoryText };
-    }, [activeForecast]);
+    }, [activeForecast, activeNowcast.rainfall]);
 
     // Dynamic Comparison Card: Now vs +4h Change
     const comparisonStats = useMemo(() => {
+        if (!activeForecast.length) {
+            return {
+                nowRain: activeNowcast.rainfall,
+                futureRain: activeNowcast.rainfall,
+                rainDiff: "0",
+                nowTemp: activeNowcast.temperature.toFixed(1),
+                futureTemp: activeNowcast.temperature.toFixed(1),
+                tempDiff: "0",
+                nowRisk: activeNowcast.risk,
+                futureRisk: activeNowcast.risk,
+                isSurge: false
+            };
+        }
         const nowItem = activeForecast[0] || {};
         const futureItem = activeForecast[activeForecast.length - 1] || {};
 
@@ -561,13 +639,23 @@ const Forecast = () => {
             futureRisk,
             isSurge: rainDiff > 5
         };
-    }, [activeForecast]);
+    }, [activeForecast, activeNowcast]);
 
     // AI Insight derivation based on dynamic active nowcast
     const aiInsightData = useMemo(() => {
         const rain = activeNowcast.rainfall;
         const hum = activeNowcast.humidity;
         const wind = activeNowcast.wind_speed;
+
+        if (isRealtime && realtimeData) {
+            const risk = (realtimeData.risk_level || "LOW").toUpperCase();
+            return {
+                text: realtimeData.alert?.action || (risk === "HIGH" ? "Flood risk rising due to intense rainfall" : risk === "MODERATE" ? "Moderate rainfall and moisture persistence" : "Normal atmospheric conditions across nowcast window"),
+                severity: risk,
+                subtext: `Telemetry: ${realtimeData.rainfall} mm/h rain, ${realtimeData.wind_speed} m/s wind, ${realtimeData.humidity}% humidity. Source: OpenWeather Real-Time API.`,
+                color: risk === "HIGH" ? "rose" : risk === "MODERATE" ? "amber" : "emerald"
+            };
+        }
 
         if (rain >= 20) {
             return {
@@ -585,11 +673,11 @@ const Forecast = () => {
                 color: "rose"
             };
         }
-        if (currentData?.reason && typeof currentData.reason === 'string' && currentData.reason.trim()) {
+        if (activeData?.reason && typeof activeData.reason === 'string' && activeData.reason.trim()) {
             return {
-                text: currentData.reason,
+                text: activeData.reason,
                 severity: activeNowcast.risk,
-                subtext: `Evaluated for ${currentData.city || "active node"} based on real-time nowcasting matrix.`,
+                subtext: `Evaluated for ${activeData.city || "active node"} based on real-time nowcasting matrix.`,
                 color: activeNowcast.risk === "HIGH" ? "rose" : activeNowcast.risk === "MODERATE" ? "amber" : "emerald"
             };
         }
@@ -607,9 +695,9 @@ const Forecast = () => {
             subtext: "Stable barometric pressure and balanced moisture indices.",
             color: "emerald"
         };
-    }, [activeNowcast, currentData?.reason, currentData?.city]);
+    }, [isRealtime, realtimeData, activeNowcast, activeData?.reason, activeData?.city]);
 
-    const activeNodeName = currentData?.location || currentData?.city || currentData?.name || "Active Node";
+    const activeNodeName = activeData?.location || activeData?.city || activeData?.name || "Active Node";
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
@@ -645,9 +733,9 @@ const Forecast = () => {
                                 <h1 className="text-2xl font-black tracking-tight">
                                     Nowcasting Engine (0–4 Hour Prediction)
                                 </h1>
-                                {currentData?.city && (
+                                {activeData?.city && (
                                     <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                                        {currentData.city}, {currentData.state || "IN"}
+                                        {activeData.city}, {activeData.state || "IN"}
                                     </span>
                                 )}
                             </div>
@@ -665,7 +753,7 @@ const Forecast = () => {
                     </Link>
                 </div>
 
-                {/* 4. SAFE SEARCH INPUT UI (Uses only existing backend nodes) */}
+                {/* 4. SAFE SEARCH INPUT UI (Uses Real-Time /nowcast with Node Fallback) */}
                 <div 
                     ref={searchContainerRef}
                     className="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 md:p-5 shadow-sm transition-all duration-300 hover:shadow-md"
@@ -693,7 +781,7 @@ const Forecast = () => {
                                         }
                                     }
                                 }}
-                                placeholder="Search city node... (e.g. Mumbai, Delhi, Bengaluru, Chennai, Kolkata)"
+                                placeholder="Search any city or location... (e.g. Mumbai, Delhi, Digha, Kolkata, Pune)"
                                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 transition-all"
                             />
 
@@ -750,11 +838,11 @@ const Forecast = () => {
                                     handleSearchSubmit();
                                 }
                             }}
-                            disabled={!search.trim()}
+                            disabled={!search.trim() || isSearching}
                             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer shrink-0"
                         >
-                            <Search size={16} />
-                            <span>Find</span>
+                            {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                            <span>{isSearching ? "Searching..." : "Find"}</span>
                         </button>
                     </div>
 
@@ -769,25 +857,76 @@ const Forecast = () => {
                         </div>
                     )}
 
-                    {/* 7. UI Display: Show "Selected Node: <node.location>" */}
+                    {/* 7. UI Display: Show "Selected Node: <node.location>" or Real-Time Location */}
                     <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 rounded-lg font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 shadow-sm">
-                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                <span>Selected Node:</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`px-3 py-1 rounded-lg font-bold border flex items-center gap-1.5 shadow-sm ${
+                                isRealtime
+                                    ? "bg-purple-50 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800"
+                                    : "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                            }`}>
+                                <span className={`w-2 h-2 rounded-full ${isRealtime ? "bg-purple-500 animate-ping" : "bg-blue-500 animate-pulse"}`} />
+                                <span>{isRealtime ? "Real-Time Location:" : "Selected Node:"}</span>
                                 <strong className="text-slate-900 dark:text-white font-black">{activeNodeName}</strong>
                             </span>
-                            {currentData?.state && (
+                            {activeData?.state && (
                                 <span className="text-slate-500 dark:text-slate-400 font-medium">
-                                    ({currentData.state})
+                                    ({activeData.state})
                                 </span>
                             )}
                         </div>
 
-                        <div className="text-slate-400 text-[11px] font-medium">
-                            {citiesList.length > 0 ? `${citiesList.length} Network Nodes Available` : "Loading nodes..."}
+                        <div className="flex items-center gap-2">
+                            {isRealtime && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsRealtime(false);
+                                        setRealtimeData(null);
+                                        setFallbackMessage("");
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                                >
+                                    <ArrowLeft size={12} />
+                                    <span>Back to Monitoring Nodes</span>
+                                </button>
+                            )}
+                            <div className="text-slate-400 text-[11px] font-medium">
+                                {citiesList.length > 0 ? `${citiesList.length} Network Nodes Available` : "Loading nodes..."}
+                            </div>
                         </div>
                     </div>
+                </div>
+
+                {/* STEP 5: ADD LABEL (IMPORTANT UX) & STEP 6: RESET BUTTON */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+                    <div className="flex items-center gap-3">
+                        <span className={`text-xs font-black px-3 py-1.5 rounded-xl border flex items-center gap-2 ${
+                            isRealtime 
+                                ? "bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800 shadow-sm"
+                                : "bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800 shadow-sm"
+                        }`}>
+                            {isRealtime ? "📡 Real-Time Location Data" : "📊 Monitoring Node Data"}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            Active Stream: <strong className="text-slate-900 dark:text-white font-bold">{isRealtime ? "OpenWeather Real-Time Ingest" : "National Ground Station Telemetry"}</strong>
+                        </span>
+                    </div>
+
+                    {isRealtime && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsRealtime(false);
+                                setRealtimeData(null);
+                                setFallbackMessage("");
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105"
+                        >
+                            <ArrowLeft size={13} />
+                            <span>Back to Monitoring Nodes</span>
+                        </button>
+                    )}
                 </div>
 
                 {/* Quick City Switcher Pills (Synced with Dashboard) */}
@@ -798,7 +937,7 @@ const Forecast = () => {
                         </span>
                         {citiesList.slice(0, 10).map((c, i) => {
                             const nodeName = c.location || c.city || c.name;
-                            const isSelected = (currentData?.location || currentData?.city) === nodeName;
+                            const isSelected = !isRealtime && (currentData?.location || currentData?.city) === nodeName;
                             return (
                                 <button
                                     key={i}
@@ -890,39 +1029,59 @@ const Forecast = () => {
                                     </span>
                                 </div>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    Readout for: <strong>{timelineHour === 0 ? "Now (Current)" : `+${timelineHour}h Future Projection`}</strong>
+                                    {isRealtime ? (
+                                        <span className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                                            <Info size={13} /> Live Nowcast (No historical projection available)
+                                        </span>
+                                    ) : (
+                                        <>Readout for: <strong>{timelineHour === 0 ? "Now (Current)" : `+${timelineHour}h Future Projection`}</strong></>
+                                    )}
                                 </p>
                             </div>
 
                             {/* Timeline Slider Section */}
                             <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/60">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                                        Horizon: {timelineHour === 0 ? "Now (0h)" : `+${timelineHour} hour${timelineHour === 1 ? '' : 's'}`}
-                                    </span>
-                                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
-                                        {TIMELINE_STEPS[timelineHour]}
-                                    </span>
-                                </div>
+                                {!isRealtime ? (
+                                    <>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                                                Horizon: {timelineHour === 0 ? "Now (0h)" : `+${timelineHour} hour${timelineHour === 1 ? '' : 's'}`}
+                                            </span>
+                                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                                                {TIMELINE_STEPS[timelineHour]}
+                                            </span>
+                                        </div>
 
-                                <input 
-                                    type="range"
-                                    min="0"
-                                    max="4"
-                                    step="1"
-                                    value={timelineHour}
-                                    onChange={(e) => setTimelineHour(Number(e.target.value))}
-                                    aria-label="Forecast timeline slider"
-                                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600 transition-all duration-300 hover:opacity-90"
-                                />
+                                        <input 
+                                            type="range"
+                                            min="0"
+                                            max="4"
+                                            step="1"
+                                            value={timelineHour}
+                                            onChange={(e) => setTimelineHour(Number(e.target.value))}
+                                            aria-label="Forecast timeline slider"
+                                            className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600 transition-all duration-300 hover:opacity-90"
+                                        />
 
-                                <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-semibold px-0.5">
-                                    <span>Now (0h)</span>
-                                    <span>+1h</span>
-                                    <span>+2h</span>
-                                    <span>+3h</span>
-                                    <span>+4h</span>
-                                </div>
+                                        <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-semibold px-0.5">
+                                            <span>Now (0h)</span>
+                                            <span>+1h</span>
+                                            <span>+2h</span>
+                                            <span>+3h</span>
+                                            <span>+4h</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs">
+                                        <div className="font-bold flex items-center gap-1.5">
+                                            <Info size={14} className="shrink-0" />
+                                            <span>Live Nowcast (No historical projection available)</span>
+                                        </div>
+                                        <p className="text-[11px] opacity-90 mt-1">
+                                            Displaying live ground telemetry observations for {activeNodeName}.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* LIVE NOWCAST METRICS (Dynamic from forecast[selectedHour]) */}
                                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -1005,15 +1164,15 @@ const Forecast = () => {
                                 <div className="flex items-center justify-between text-xs mb-2">
                                     <span className="text-slate-500 dark:text-slate-400">Synoptic Trajectory:</span>
                                     <span className={`font-bold ${
-                                        currentData?.risk_level === "HIGH" ? "text-red-500" : currentData?.risk_level === "MODERATE" ? "text-amber-500" : "text-emerald-500"
+                                        activeData?.risk_level === "HIGH" ? "text-red-500" : activeData?.risk_level === "MODERATE" ? "text-amber-500" : "text-emerald-500"
                                     }`}>
-                                        {currentData?.risk_level === "HIGH" ? "Active Storm Cell" : currentData?.risk_level === "MODERATE" ? "Moisture Influx" : "Steady Normal"}
+                                        {activeData?.risk_level === "HIGH" ? "Active Storm Cell" : activeData?.risk_level === "MODERATE" ? "Moisture Influx" : "Steady Normal"}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
                                     <span className="text-slate-500 dark:text-slate-400">Model Confidence:</span>
                                     <span className="font-bold text-blue-600 dark:text-blue-400">
-                                        {currentData?.prediction?.confidence ? `${Math.round(currentData.prediction.confidence * 100)}%` : "88.5%"}
+                                        {activeData?.prediction?.confidence ? `${Math.round(activeData.prediction.confidence * 100)}%` : (isRealtime ? "85.0%" : "88.5%")}
                                     </span>
                                 </div>
                                 <div className="mt-3 p-2 bg-white dark:bg-slate-900/90 rounded-lg border border-slate-200/80 dark:border-slate-700/60 text-[11px] text-slate-500 dark:text-slate-400">
@@ -1054,136 +1213,174 @@ const Forecast = () => {
                     </div>
 
                     {/* Chart SVG Visualization with Tooltip and Guide Line */}
-                    <div className="relative w-full overflow-visible select-none">
-                        {/* Floating Tooltip Overlay */}
-                        <div 
-                            className="absolute pointer-events-none z-20 transition-all duration-300 ease-out -translate-x-1/2"
-                            style={{ 
-                                left: `${(activePointData.x / chartWidth) * 100}%`,
-                                top: `${Math.max(0, (activePointData.y / chartHeight) * 100 - 32)}%`
-                            }}
-                        >
-                            <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 dark:bg-slate-800/95 backdrop-blur-md text-white border border-slate-700/80 shadow-xl flex items-center gap-2 whitespace-nowrap">
-                                <div className="w-2 h-2 rounded-full bg-blue-400 animate-ping"></div>
-                                <span className="text-xs font-bold text-blue-300">{activePointData.timeLabel}:</span>
-                                <span className="text-xs font-black text-white">{activePointData.val} mm</span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-blue-500/20 text-blue-300">
-                                    {activePointData.val >= 20 ? "Heavy" : activePointData.val >= 10 ? "Moderate" : "Light"}
+                    {isRealtime ? (
+                        <div className="py-12 flex flex-col items-center justify-center text-center p-6 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+                            <Sparkles className="text-purple-500 mb-2" size={32} />
+                            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                                Live Nowcast (No historical projection available)
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">
+                                Showing instantaneous live telemetry for <strong>{activeNodeName}</strong> directly from real-time atmospheric observation sensors.
+                            </p>
+                            <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs font-semibold">
+                                <span className="px-3 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                    Rainfall: {activeNowcast.rainfall} mm
+                                </span>
+                                <span className="px-3 py-1 rounded-lg bg-teal-50 dark:bg-teal-900/40 text-teal-600 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                                    Humidity: {activeNowcast.humidity}%
+                                </span>
+                                <span className="px-3 py-1 rounded-lg bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                                    Wind: {activeNowcast.wind_speed} m/s
+                                </span>
+                                <span className="px-3 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                    Temperature: {activeNowcast.temperature}°C
                                 </span>
                             </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsRealtime(false);
+                                    setRealtimeData(null);
+                                    setFallbackMessage("");
+                                }}
+                                className="mt-5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                                <ArrowLeft size={13} />
+                                <span>Back to Monitoring Nodes</span>
+                            </button>
                         </div>
+                    ) : (
+                        <div className="relative w-full overflow-visible select-none">
+                            {/* Floating Tooltip Overlay */}
+                            <div 
+                                className="absolute pointer-events-none z-20 transition-all duration-300 ease-out -translate-x-1/2"
+                                style={{ 
+                                    left: `${(activePointData.x / chartWidth) * 100}%`,
+                                    top: `${Math.max(0, (activePointData.y / chartHeight) * 100 - 32)}%`
+                                }}
+                            >
+                                <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 dark:bg-slate-800/95 backdrop-blur-md text-white border border-slate-700/80 shadow-xl flex items-center gap-2 whitespace-nowrap">
+                                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-ping"></div>
+                                    <span className="text-xs font-bold text-blue-300">{activePointData.timeLabel}:</span>
+                                    <span className="text-xs font-black text-white">{activePointData.val} mm</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-blue-500/20 text-blue-300">
+                                        {activePointData.val >= 20 ? "Heavy" : activePointData.val >= 10 ? "Moderate" : "Light"}
+                                    </span>
+                                </div>
+                            </div>
 
-                        <svg 
-                            viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
-                            className="w-full h-48 sm:h-56 overflow-visible"
-                        >
-                            <defs>
-                                <linearGradient id="rainGradientNowcast" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.45" />
-                                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                                </linearGradient>
-                            </defs>
+                            <svg 
+                                viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
+                                className="w-full h-48 sm:h-56 overflow-visible"
+                            >
+                                <defs>
+                                    <linearGradient id="rainGradientNowcast" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.45" />
+                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+                                    </linearGradient>
+                                </defs>
 
-                            {/* Dynamic Grid Lines based on Peak */}
-                            {[0.33, 0.66, 1].map((ratio) => {
-                                const tickVal = Math.round((chartStats.peak + 5) * ratio);
-                                const maxVal = Math.max(25, chartStats.peak) * 1.25;
-                                const yPos = chartHeight - paddingY - (tickVal / maxVal) * (chartHeight - paddingY * 2);
-                                return (
-                                    <g key={ratio} className="text-slate-300 dark:text-slate-700/70">
-                                        <line 
-                                            x1={paddingX} 
-                                            y1={yPos} 
-                                            x2={chartWidth - paddingX} 
-                                            y2={yPos} 
-                                            stroke="currentColor" 
-                                            strokeDasharray="4 4" 
-                                            strokeWidth="1" 
-                                            opacity="0.6"
-                                        />
-                                        <text 
-                                            x={paddingX - 8} 
-                                            y={yPos + 3} 
-                                            textAnchor="end" 
-                                            className="text-[10px] fill-slate-400 dark:fill-slate-500 font-semibold"
+                                {/* Dynamic Grid Lines based on Peak */}
+                                {[0.33, 0.66, 1].map((ratio) => {
+                                    const tickVal = Math.round((chartStats.peak + 5) * ratio);
+                                    const maxVal = Math.max(25, chartStats.peak) * 1.25;
+                                    const yPos = chartHeight - paddingY - (tickVal / maxVal) * (chartHeight - paddingY * 2);
+                                    return (
+                                        <g key={ratio} className="text-slate-300 dark:text-slate-700/70">
+                                            <line 
+                                                x1={paddingX} 
+                                                y1={yPos} 
+                                                x2={chartWidth - paddingX} 
+                                                y2={yPos} 
+                                                stroke="currentColor" 
+                                                strokeDasharray="4 4" 
+                                                strokeWidth="1" 
+                                                opacity="0.6"
+                                            />
+                                            <text 
+                                                x={paddingX - 8} 
+                                                y={yPos + 3} 
+                                                textAnchor="end" 
+                                                className="text-[10px] fill-slate-400 dark:fill-slate-500 font-semibold"
+                                            >
+                                                {tickVal}mm
+                                            </text>
+                                        </g>
+                                    );
+                                })}
+
+                                {/* Vertical Guide Line at Active Point */}
+                                <line 
+                                    x1={activePointData.x} 
+                                    y1={paddingY} 
+                                    x2={activePointData.x} 
+                                    y2={chartHeight - paddingY} 
+                                    stroke="#3b82f6" 
+                                    strokeDasharray="3 3" 
+                                    strokeWidth="1.5" 
+                                    opacity="0.6"
+                                    className="transition-all duration-300 ease-out"
+                                />
+
+                                {/* Area Fill */}
+                                <path d={svgAreaD} fill="url(#rainGradientNowcast)" />
+
+                                {/* Trend Line Path */}
+                                <path 
+                                    d={svgPathD} 
+                                    fill="none" 
+                                    stroke="#3b82f6" 
+                                    strokeWidth="3.5" 
+                                    strokeLinecap="round" 
+                                    strokeLinejoin="round" 
+                                    className="drop-shadow-sm animate-line-draw"
+                                />
+
+                                {/* Data Points */}
+                                {chartPoints.map((pt, idx) => {
+                                    const isActive = idx === activeChartIndex;
+                                    return (
+                                        <g 
+                                            key={idx}
+                                            onMouseEnter={() => setHoveredPoint(idx)}
+                                            onMouseLeave={() => setHoveredPoint(null)}
+                                            onClick={() => setTimelineHour(idx)}
+                                            className="cursor-pointer group"
                                         >
-                                            {tickVal}mm
-                                        </text>
-                                    </g>
-                                );
-                            })}
+                                            <circle cx={pt.x} cy={pt.y} r="22" fill="transparent" />
 
-                            {/* Vertical Guide Line at Active Point */}
-                            <line 
-                                x1={activePointData.x} 
-                                y1={paddingY} 
-                                x2={activePointData.x} 
-                                y2={chartHeight - paddingY} 
-                                stroke="#3b82f6" 
-                                strokeDasharray="3 3" 
-                                strokeWidth="1.5" 
-                                opacity="0.6"
-                                className="transition-all duration-300 ease-out"
-                            />
+                                            {isActive && (
+                                                <circle 
+                                                    cx={pt.x} 
+                                                    cy={pt.y} 
+                                                    r="14" 
+                                                    className="fill-blue-500/20 stroke-blue-500 animate-pulse" 
+                                                    strokeWidth="2"
+                                                />
+                                            )}
 
-                            {/* Area Fill */}
-                            <path d={svgAreaD} fill="url(#rainGradientNowcast)" />
-
-                            {/* Trend Line Path */}
-                            <path 
-                                d={svgPathD} 
-                                fill="none" 
-                                stroke="#3b82f6" 
-                                strokeWidth="3.5" 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round" 
-                                className="drop-shadow-sm animate-line-draw"
-                            />
-
-                            {/* Data Points */}
-                            {chartPoints.map((pt, idx) => {
-                                const isActive = idx === activeChartIndex;
-                                return (
-                                    <g 
-                                        key={idx}
-                                        onMouseEnter={() => setHoveredPoint(idx)}
-                                        onMouseLeave={() => setHoveredPoint(null)}
-                                        onClick={() => setTimelineHour(idx)}
-                                        className="cursor-pointer group"
-                                    >
-                                        <circle cx={pt.x} cy={pt.y} r="22" fill="transparent" />
-
-                                        {isActive && (
                                             <circle 
                                                 cx={pt.x} 
                                                 cy={pt.y} 
-                                                r="14" 
-                                                className="fill-blue-500/20 stroke-blue-500 animate-pulse" 
-                                                strokeWidth="2"
+                                                r={isActive ? 7 : 4.5} 
+                                                className={`${isActive ? "fill-blue-600 stroke-white dark:stroke-slate-900" : "fill-white dark:fill-slate-800 stroke-blue-500"} transition-all duration-300`} 
+                                                strokeWidth="2.5"
                                             />
-                                        )}
 
-                                        <circle 
-                                            cx={pt.x} 
-                                            cy={pt.y} 
-                                            r={isActive ? 7 : 4.5} 
-                                            className={`${isActive ? "fill-blue-600 stroke-white dark:stroke-slate-900" : "fill-white dark:fill-slate-800 stroke-blue-500"} transition-all duration-300`} 
-                                            strokeWidth="2.5"
-                                        />
-
-                                        <text 
-                                            x={pt.x} 
-                                            y={chartHeight - 6} 
-                                            textAnchor="middle" 
-                                            className={`text-[11px] font-bold ${isActive ? "fill-blue-600 dark:fill-blue-400" : "fill-slate-400 dark:fill-slate-500"} transition-all duration-300`}
-                                        >
-                                            {pt.timeLabel}
-                                        </text>
-                                    </g>
-                                );
-                            })}
-                        </svg>
-                    </div>
+                                            <text 
+                                                x={pt.x} 
+                                                y={chartHeight - 6} 
+                                                textAnchor="middle" 
+                                                className={`text-[11px] font-bold ${isActive ? "fill-blue-600 dark:fill-blue-400" : "fill-slate-400 dark:fill-slate-500"} transition-all duration-300`}
+                                            >
+                                                {pt.timeLabel}
+                                            </text>
+                                        </g>
+                                    );
+                                })}
+                            </svg>
+                        </div>
+                    )}
 
                     {/* Dynamic Chart Summary Chips */}
                     <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -1224,42 +1421,56 @@ const Forecast = () => {
                                 </span>
                             </div>
 
-                            {/* Horizontal Step Timeline */}
-                            <div className="mt-4 relative py-2">
-                                {/* Connecting Background Track */}
-                                <div className="absolute top-1/2 left-6 right-6 h-2 -translate-y-1/2 rounded-full bg-slate-200 dark:bg-slate-700/80" />
-
-                                {/* Step Nodes */}
-                                <div className="relative flex justify-between">
-                                    {riskProgressionSteps.map((item, idx) => {
-                                        const isSelected = timelineHour === item.hour;
-                                        return (
-                                            <button
-                                                key={idx}
-                                                onClick={() => setTimelineHour(item.hour)}
-                                                className="flex flex-col items-center gap-1.5 focus:outline-none group cursor-pointer"
-                                            >
-                                                <div 
-                                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-md border-2 border-white dark:border-slate-900 transition-all duration-300 ${item.bgClass} ${
-                                                        isSelected ? 'ring-4 ring-blue-500/50 scale-125' : 'group-hover:scale-110'
-                                                    }`}
-                                                >
-                                                    {item.hour === 0 ? "0h" : `+${item.hour}h`}
-                                                </div>
-                                                <span className={`text-[11px] font-bold transition-colors duration-300 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200'}`}>
-                                                    {item.step}
-                                                </span>
-                                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${item.textClass} bg-slate-100 dark:bg-slate-800/80`}>
-                                                    {item.risk}
-                                                </span>
-                                                <span className="text-[10px] font-medium text-slate-400">
-                                                    {item.rain}mm
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
+                            {/* Horizontal Step Timeline or Realtime Status */}
+                            {isRealtime ? (
+                                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 text-center py-6">
+                                    <span className={`text-xs font-black px-3 py-1 rounded-full border ${currentRiskInfo.badgeClass}`}>
+                                        {currentRiskInfo.label}
+                                    </span>
+                                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm mt-3">
+                                        Live Risk Classification: {activeNowcast.risk}
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                                        Live Nowcast (No historical projection available). Telemetry derived from real-time atmospheric observations.
+                                    </p>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="mt-4 relative py-2">
+                                    {/* Connecting Background Track */}
+                                    <div className="absolute top-1/2 left-6 right-6 h-2 -translate-y-1/2 rounded-full bg-slate-200 dark:bg-slate-700/80" />
+
+                                    {/* Step Nodes */}
+                                    <div className="relative flex justify-between">
+                                        {riskProgressionSteps.map((item, idx) => {
+                                            const isSelected = timelineHour === item.hour;
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => setTimelineHour(item.hour)}
+                                                    className="flex flex-col items-center gap-1.5 focus:outline-none group cursor-pointer"
+                                                >
+                                                    <div 
+                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-md border-2 border-white dark:border-slate-900 transition-all duration-300 ${item.bgClass} ${
+                                                            isSelected ? 'ring-4 ring-blue-500/50 scale-125' : 'group-hover:scale-110'
+                                                        }`}
+                                                    >
+                                                        {item.hour === 0 ? "0h" : `+${item.hour}h`}
+                                                    </div>
+                                                    <span className={`text-[11px] font-bold transition-colors duration-300 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200'}`}>
+                                                        {item.step}
+                                                    </span>
+                                                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${item.textClass} bg-slate-100 dark:bg-slate-800/80`}>
+                                                        {item.risk}
+                                                    </span>
+                                                    <span className="text-[10px] font-medium text-slate-400">
+                                                        {item.rain}mm
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
@@ -1288,62 +1499,73 @@ const Forecast = () => {
                                 </span>
                             </div>
 
-                            {/* 3 Metric Comparison Grid */}
-                            <div className="grid grid-cols-3 gap-3">
-                                {/* Rainfall Increase (mm) */}
-                                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all duration-300 hover:border-blue-400/60">
-                                    <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] font-medium mb-1">
-                                        <span>Rainfall Shift</span>
-                                        <ArrowUpRight size={14} className="text-blue-500" />
+                            {/* 3 Metric Comparison Grid or Realtime Status */}
+                            {isRealtime ? (
+                                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 text-center py-6">
+                                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                        Source: <strong className="text-purple-600 dark:text-purple-400 font-bold">OpenWeather Real-Time Ingest</strong>
                                     </div>
-                                    <div className="text-lg font-black text-blue-600 dark:text-blue-400">
-                                        {comparisonStats.rainDiff} mm
-                                    </div>
-                                    <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex items-center justify-between">
-                                        <span>{comparisonStats.nowRain}mm</span>
-                                        <ArrowRight size={10} className="text-slate-400" />
-                                        <span className="font-bold text-slate-700 dark:text-slate-300">{comparisonStats.futureRain}mm</span>
-                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm mx-auto">
+                                        Live Nowcast (No historical projection available). Real-time ground sensor telemetry is currently active for {activeNodeName}.
+                                    </p>
                                 </div>
+                            ) : (
+                                <div className="grid grid-cols-3 gap-3">
+                                    {/* Rainfall Increase (mm) */}
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all duration-300 hover:border-blue-400/60">
+                                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] font-medium mb-1">
+                                            <span>Rainfall Shift</span>
+                                            <ArrowUpRight size={14} className="text-blue-500" />
+                                        </div>
+                                        <div className="text-lg font-black text-blue-600 dark:text-blue-400">
+                                            {comparisonStats.rainDiff} mm
+                                        </div>
+                                        <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex items-center justify-between">
+                                            <span>{comparisonStats.nowRain}mm</span>
+                                            <ArrowRight size={10} className="text-slate-400" />
+                                            <span className="font-bold text-slate-700 dark:text-slate-300">{comparisonStats.futureRain}mm</span>
+                                        </div>
+                                    </div>
 
-                                {/* Temperature Change */}
-                                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all duration-300 hover:border-amber-400/60">
-                                    <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] font-medium mb-1">
-                                        <span>Temp Change</span>
-                                        <ArrowDownRight size={14} className="text-teal-500" />
+                                    {/* Temperature Change */}
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all duration-300 hover:border-amber-400/60">
+                                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] font-medium mb-1">
+                                            <span>Temp Change</span>
+                                            <ArrowDownRight size={14} className="text-teal-500" />
+                                        </div>
+                                        <div className="text-lg font-black text-slate-800 dark:text-slate-100">
+                                            {comparisonStats.tempDiff}°C
+                                        </div>
+                                        <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex items-center justify-between">
+                                            <span>{comparisonStats.nowTemp}°C</span>
+                                            <ArrowRight size={10} className="text-slate-400" />
+                                            <span className="font-bold text-slate-700 dark:text-slate-300">{comparisonStats.futureTemp}°C</span>
+                                        </div>
                                     </div>
-                                    <div className="text-lg font-black text-slate-800 dark:text-slate-100">
-                                        {comparisonStats.tempDiff}°C
-                                    </div>
-                                    <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex items-center justify-between">
-                                        <span>{comparisonStats.nowTemp}°C</span>
-                                        <ArrowRight size={10} className="text-slate-400" />
-                                        <span className="font-bold text-slate-700 dark:text-slate-300">{comparisonStats.futureTemp}°C</span>
-                                    </div>
-                                </div>
 
-                                {/* Risk Change */}
-                                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all duration-300 hover:border-rose-400/60">
-                                    <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] font-medium mb-1">
-                                        <span>Risk Evolution</span>
-                                        <Zap size={14} className="text-rose-500" />
-                                    </div>
-                                    <div className="text-xs font-black flex items-center gap-1.5 mt-1">
-                                        <span className={`px-1.5 py-0.5 rounded text-[11px] ${getRiskBadge(comparisonStats.nowRisk).badgeClass}`}>
-                                            {comparisonStats.nowRisk}
-                                        </span>
-                                        <ArrowRight size={12} className="text-slate-400" />
-                                        <span className={`px-1.5 py-0.5 rounded text-[11px] ${getRiskBadge(comparisonStats.futureRisk).badgeClass}`}>
-                                            {comparisonStats.futureRisk}
-                                        </span>
-                                    </div>
-                                    <div className={`text-[10px] font-bold mt-2 ${
-                                        comparisonStats.futureRisk === "HIGH" ? "text-rose-500 dark:text-rose-400" : "text-slate-500"
-                                    }`}>
-                                        {comparisonStats.isSurge ? "Convective Surge Alert" : "Stable Evolution"}
+                                    {/* Risk Change */}
+                                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all duration-300 hover:border-rose-400/60">
+                                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] font-medium mb-1">
+                                            <span>Risk Evolution</span>
+                                            <Zap size={14} className="text-rose-500" />
+                                        </div>
+                                        <div className="text-xs font-black flex items-center gap-1.5 mt-1">
+                                            <span className={`px-1.5 py-0.5 rounded text-[11px] ${getRiskBadge(comparisonStats.nowRisk).badgeClass}`}>
+                                                {comparisonStats.nowRisk}
+                                            </span>
+                                            <ArrowRight size={12} className="text-slate-400" />
+                                            <span className={`px-1.5 py-0.5 rounded text-[11px] ${getRiskBadge(comparisonStats.futureRisk).badgeClass}`}>
+                                                {comparisonStats.futureRisk}
+                                            </span>
+                                        </div>
+                                        <div className={`text-[10px] font-bold mt-2 ${
+                                            comparisonStats.futureRisk === "HIGH" ? "text-rose-500 dark:text-rose-400" : "text-slate-500"
+                                        }`}>
+                                            {comparisonStats.isSurge ? "Convective Surge Alert" : "Stable Evolution"}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
