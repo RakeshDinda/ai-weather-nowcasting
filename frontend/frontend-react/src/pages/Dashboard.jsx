@@ -32,8 +32,8 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch ONLY from /alerts — SINGLE SOURCE OF TRUTH
-            const response = await fetch("http://127.0.0.1:8000/alerts");
+            // Fetch ONLY from /alerts — SINGLE SOURCE OF TRUTH (380 ZONES)
+            const response = await fetch("http://127.0.0.1:8000/alerts?limit=380");
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -238,7 +238,7 @@ const Dashboard = () => {
     };
 
     return (
-        <div className="flex flex-col h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 font-sans overflow-hidden transition-colors duration-300">
+        <div className="flex flex-col h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 font-sans overflow-hidden transition-colors duration-300">
             {/* Top Navigation Bar */}
             <TopHeader 
                 onSearch={handleSearch} 
@@ -296,7 +296,7 @@ const Dashboard = () => {
                         {/* Interactive Main Map & Right Panel */}
                         <div className="flex-1 flex px-6 py-4 gap-6 min-h-[500px]">
                             {/* Map Container */}
-                            <div className="flex-1 relative rounded-2xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
+                            <div className="flex-1 relative rounded-2xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#020617] flex flex-col">
                                 {/* Map Controls Header */}
                                 <div className="absolute top-4 left-4 z-[400] flex gap-2">
                                     <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-sm rounded-lg p-1 flex border border-slate-200 dark:border-slate-700">

@@ -25,7 +25,7 @@ const RiskDistribution = ({ locations = [], allCitiesData = [], summary = null }
     }
 
     return (
-        <div className="h-full bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between">
+        <div className="h-full bg-white dark:bg-[#111827] rounded-2xl shadow-lg border border-slate-200 dark:border-gray-700 p-5 flex flex-col justify-between">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-800 dark:text-white">Risk Distribution <span className="text-slate-400 font-bold text-xs ml-1">({total} Zones)</span></h3>
                 <button className="text-blue-600 dark:text-blue-400 text-[11px] font-black hover:underline tracking-wide">View Details ➔</button>

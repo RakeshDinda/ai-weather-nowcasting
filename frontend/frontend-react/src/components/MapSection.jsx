@@ -108,7 +108,7 @@ const MapSection = ({
             
             {/* Clustered Station Markers */}
             <MarkerClusterGroup
-                chunkedLoading
+                chunkedLoading={true}
                 showCoverageOnHover={false}
                 spiderfyOnMaxZoom={true}
                 maxClusterRadius={40}

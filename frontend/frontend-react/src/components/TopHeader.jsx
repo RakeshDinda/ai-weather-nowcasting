@@ -19,7 +19,7 @@ const TopHeader = ({ onSearch, searchLoading, selectedCity, alertCount = null })
     };
 
     return (
-        <header className="h-[72px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 z-50 shrink-0">
+        <header className="h-[72px] bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 z-50 shrink-0">
             <div className="flex items-center gap-8">
                 <Link to="/" className="flex items-center gap-3 hover:opacity-95 transition-opacity">
                     <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md shadow-blue-500/20">

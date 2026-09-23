@@ -169,7 +169,7 @@ const Alerts = () => {
         if (!isSilent) setLoading(true);
         setError(null);
         try {
-            const res = await fetch("http://127.0.0.1:8000/alerts");
+            const res = await fetch("http://127.0.0.1:8000/alerts?limit=380");
             if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch alerts`);
             const data = await res.json();
             const fetchedAlerts = data.alerts || [];
@@ -320,7 +320,7 @@ const Alerts = () => {
                 {/* 2. TOP SUMMARY CARDS (FLAT WHITE CARDS, NO GRADIENTS) */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Total Alerts */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-4 shadow-sm flex items-center justify-between transition-all duration-200 hover:shadow-md">
+                    <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm flex items-center justify-between transition-all duration-200 hover:shadow-md">
                         <div>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                 Total Alerts
@@ -338,7 +338,7 @@ const Alerts = () => {
                     </div>
 
                     {/* High Risk */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-4 shadow-sm flex items-center justify-between transition-all duration-200 hover:shadow-md">
+                    <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm flex items-center justify-between transition-all duration-200 hover:shadow-md">
                         <div>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                 High Risk
@@ -356,7 +356,7 @@ const Alerts = () => {
                     </div>
 
                     {/* Moderate */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-4 shadow-sm flex items-center justify-between transition-all duration-200 hover:shadow-md">
+                    <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm flex items-center justify-between transition-all duration-200 hover:shadow-md">
                         <div>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                 Moderate
@@ -374,7 +374,7 @@ const Alerts = () => {
                     </div>
 
                     {/* Low */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-4 shadow-sm flex items-center justify-between transition-all duration-200 hover:shadow-md">
+                    <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-sm flex items-center justify-between transition-all duration-200 hover:shadow-md">
                         <div>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                 Low
@@ -393,7 +393,7 @@ const Alerts = () => {
                 </div>
 
                 {/* 3. FILTER BAR (CLEAN, ONE-ROW ALIGNMENT WITH HOVER & ACTIVE FEEDBACK) */}
-                <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                     {/* Tabs: All / High / Moderate / Low */}
                     <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                         <button
@@ -490,7 +490,7 @@ const Alerts = () => {
 
                 {/* Empty State */}
                 {!loading && filteredAndSortedAlerts.length === 0 && (
-                    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-10 text-center my-6 shadow-sm flex flex-col items-center justify-center">
+                    <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 rounded-lg p-10 text-center my-6 shadow-sm flex flex-col items-center justify-center">
                         <ShieldCheck size={28} className="text-emerald-500 mb-2" />
                         <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
                             No active alerts found
@@ -527,7 +527,7 @@ const Alerts = () => {
                                 /* 1. CARD HOVER EFFECT: hover:shadow-md, hover:-translate-y-1, hover:border-blue-300 */
                                 <div
                                     key={cardKey}
-                                    className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 rounded-lg p-4 sm:p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
+                                    className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 rounded-lg p-4 sm:p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
                                 >
                                     <div>
                                         {/* Top Row: City Name + Location below (left) & Severity badge (right) */}

@@ -44,7 +44,7 @@ const RightPanel = ({ selectedCity, cityData, onClose }) => {
 
     if (!cityObj) {
         return (
-            <div className="h-full bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-6 flex flex-col items-center justify-center text-center">
+            <div className="h-full bg-white dark:bg-[#111827] rounded-2xl shadow-lg border border-slate-200 dark:border-gray-700 p-6 flex flex-col items-center justify-center text-center">
                 <MapPin className="text-slate-400 mb-2" size={32} />
                 <p className="text-slate-600 dark:text-slate-300 font-bold text-sm">No City Selected</p>
                 <p className="text-slate-400 text-xs mt-1">Search for a city or click a marker on the map to inspect weather and threat data.</p>
@@ -129,7 +129,7 @@ const RightPanel = ({ selectedCity, cityData, onClose }) => {
     const cityName = city || "Unknown Location";
 
     return (
-        <div className="h-full bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
+        <div className="h-full bg-white dark:bg-[#111827] rounded-2xl shadow-lg border border-slate-200 dark:border-gray-700 flex flex-col overflow-hidden">
             {/* Header Area */}
             <div className="p-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
                 <div className="flex justify-between items-start">

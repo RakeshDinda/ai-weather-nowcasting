@@ -18,10 +18,10 @@ const Sidebar = ({
     const navLinkClass = ({ isActive }) =>
         isActive
             ? "flex items-center gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-xl font-bold transition-colors"
-            : "flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl font-semibold transition-colors";
+            : "flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl font-semibold transition-colors";
 
     return (
-        <aside className="w-[260px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between overflow-y-auto shrink-0 z-40">
+        <aside className="w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between overflow-y-auto shrink-0 z-40">
             <div className="p-4">
                 <nav className="space-y-1">
                     <NavLink to="/" end className={navLinkClass}>
@@ -30,7 +30,7 @@ const Sidebar = ({
                     </NavLink>
                     <button 
                         onClick={onMonitorIndia} 
-                        className="w-full flex items-center justify-between px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl font-semibold transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center justify-between px-4 py-3 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl font-semibold transition-colors text-left cursor-pointer"
                     >
                         <div className="flex items-center gap-3">
                             <Map size={18} />
@@ -45,7 +45,7 @@ const Sidebar = ({
                     <NavLink to="/alerts" className={({ isActive }) => 
                         isActive
                             ? "flex items-center justify-between px-4 py-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-xl font-bold transition-colors"
-                            : "flex items-center justify-between px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl font-semibold transition-colors"
+                            : "flex items-center justify-between px-4 py-3 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl font-semibold transition-colors"
                     }>
                         <div className="flex items-center gap-3">
                             <Bell size={18} />
@@ -59,7 +59,7 @@ const Sidebar = ({
                     </NavLink>
                     <button 
                         onClick={onMonitorIndia} 
-                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl font-semibold transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl font-semibold transition-colors text-left cursor-pointer"
                     >
                         <MapPin size={18} />
                         <span className="text-sm">Locations</span>
@@ -70,7 +70,7 @@ const Sidebar = ({
                     </NavLink>
                     <Link 
                         to="/analytics" 
-                        className="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl font-semibold transition-colors"
+                        className="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl font-semibold transition-colors"
                     >
                         <Settings size={18} />
                         <span className="text-sm">Settings</span>

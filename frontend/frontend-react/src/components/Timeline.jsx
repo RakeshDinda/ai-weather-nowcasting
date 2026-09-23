@@ -6,7 +6,7 @@ const Timeline = () => {
     const steps = ['Now', '+1h', '+2h', '+3h', '+4h', '+5h', '+6h'];
 
     return (
-        <div className="h-full bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between overflow-hidden">
+        <div className="h-full bg-white dark:bg-[#111827] rounded-2xl shadow-lg border border-slate-200 dark:border-gray-700 p-5 flex flex-col justify-between overflow-hidden">
             <div className="flex items-center gap-2">
                 <FileText size={16} className="text-blue-600" />
                 <h3 className="text-sm font-black text-slate-800 dark:text-white">Forecast Timeline <span className="text-slate-400 font-bold ml-1 text-xs">(Next 6 Hours)</span></h3>

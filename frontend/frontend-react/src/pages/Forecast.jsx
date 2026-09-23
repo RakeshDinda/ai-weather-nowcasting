@@ -700,7 +700,7 @@ const Forecast = () => {
     const activeNodeName = activeData?.location || activeData?.city || activeData?.name || "Active Node";
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
+        <div className="min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
             {/* Inline Style for Chart Drawing Animation */}
             <style>{`
                 @keyframes drawPath {
