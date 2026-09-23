@@ -150,6 +150,7 @@ const resolveCleanAction = (alert) => {
 
 const Alerts = () => {
     const [alerts, setAlerts] = useState([]);
+    const [summary, setSummary] = useState({ total: 0, high: 0, moderate: 0, low: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('ALL'); // 'ALL' | 'HIGH' | 'MODERATE' | 'LOW'
@@ -160,7 +161,7 @@ const Alerts = () => {
 
     const isFetchingRef = useRef(false);
 
-    // Fetch alerts from backend /alerts
+    // Fetch alerts from backend /alerts — SINGLE SOURCE OF TRUTH
     const fetchAlerts = useCallback(async (isSilent = false) => {
         if (isFetchingRef.current) return;
         isFetchingRef.current = true;
@@ -172,8 +173,15 @@ const Alerts = () => {
             if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch alerts`);
             const data = await res.json();
             const fetchedAlerts = data.alerts || [];
+            const fetchedSummary = data.summary || {
+                total: fetchedAlerts.length,
+                high: 0,
+                moderate: 0,
+                low: 0
+            };
             setAlerts(fetchedAlerts);
-            setLastSyncTime(new Date());
+            setSummary(fetchedSummary);
+            setLastSyncTime(data.last_updated ? new Date(data.last_updated) : new Date());
         } catch (err) {
             console.error("Alerts fetch error:", err);
             setError(err.message || "Failed to load alerts.");
@@ -211,11 +219,12 @@ const Alerts = () => {
         });
     };
 
-    // Metrics for the 4 summary cards
-    const totalCount = alerts.length;
-    const highCount = alerts.filter(a => normalizeSeverity(a.severity) === 'HIGH').length;
-    const modCount = alerts.filter(a => normalizeSeverity(a.severity) === 'MODERATE').length;
-    const lowCount = alerts.filter(a => normalizeSeverity(a.severity) === 'LOW').length;
+    // Metrics for the 4 summary cards — SINGLE SOURCE OF TRUTH FROM BACKEND
+    // DO NOT recalculate with alerts.filter on client side
+    const totalCount = summary.total ?? alerts.length;
+    const highCount = summary.high ?? 0;
+    const modCount = summary.moderate ?? 0;
+    const lowCount = summary.low ?? 0;
 
     // Filter and Sort Alerts
     const filteredAndSortedAlerts = useMemo(() => {
@@ -257,7 +266,7 @@ const Alerts = () => {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-gray-900 dark:text-gray-100 flex flex-col font-sans transition-colors duration-200">
             {/* Top Navigation Header (matches existing Dashboard/Forecast) */}
-            <TopHeader onSearch={() => {}} searchLoading={false} selectedCity="All India" />
+            <TopHeader onSearch={() => {}} searchLoading={false} selectedCity="All India" alertCount={highCount} />
 
             <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6">
                 

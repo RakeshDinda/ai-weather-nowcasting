@@ -3,7 +3,7 @@ import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { Search, Bell, MapPin, CloudLightning } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
-const TopHeader = ({ onSearch, searchLoading, selectedCity }) => {
+const TopHeader = ({ onSearch, searchLoading, selectedCity, alertCount = null }) => {
     const [searchInput, setSearchInput] = useState('');
     const navigate = useNavigate();
 
@@ -114,9 +114,13 @@ const TopHeader = ({ onSearch, searchLoading, selectedCity }) => {
                     </button>
                 </form>
                 
-                <Link to="/alerts" className="relative cursor-pointer hover:opacity-80 transition-opacity">
+                <Link to="/alerts" className="relative cursor-pointer hover:opacity-80 transition-opacity" title="View Weather Alerts">
                     <Bell size={20} className="text-slate-600 dark:text-slate-300" />
-                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white border-2 border-white dark:border-slate-900">3</span>
+                    {alertCount != null && alertCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white border-2 border-white dark:border-slate-900">
+                            {alertCount}
+                        </span>
+                    )}
                 </Link>
                 
                 <ThemeToggle />

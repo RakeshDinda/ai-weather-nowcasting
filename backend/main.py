@@ -141,39 +141,112 @@ def generate_explainable_reason(rainfall: float, humidity: float, wind_speed: fl
         return "Normal atmospheric conditions"
 
 
-def generate_actionable_alert(risk_level, rainfall, humidity, wind_speed):
-    alert = {
-        "type": "NORMAL",
-        "severity": "LOW",
-        "action": "No immediate action required"
+def engineer_features(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Feature Engineering for Real-Time Nowcasting:
+    - moisture_index = humidity * rainfall
+    - instability_index = temperature * humidity
+    - rain_intensity = rainfall * wind_speed
+    """
+    humidity = float(data.get("humidity", 0.0) or 0.0)
+    rainfall = float(data.get("rainfall", 0.0) or 0.0)
+    temperature = float(data.get("temperature", 0.0) or 0.0)
+    wind_speed = float(data.get("wind_speed", data.get("wind", 0.0)) or 0.0)
+
+    moisture_index = round(humidity * rainfall, 2)
+    instability_index = round(temperature * humidity, 2)
+    rain_intensity = round(rainfall * wind_speed, 2)
+
+    features = dict(data)
+    features.update({
+        "temperature": temperature,
+        "humidity": humidity,
+        "rainfall": rainfall,
+        "wind_speed": wind_speed,
+        "moisture_index": moisture_index,
+        "instability_index": instability_index,
+        "rain_intensity": rain_intensity,
+    })
+    return features
+
+
+def predict_nowcast(features: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Pluggable Nowcast Prediction Pipeline:
+    - rainfall > 20 OR humidity > 90 OR wind_speed > 10 -> HIGH
+    - rainfall > 5 OR humidity > 70 OR wind_speed > 6 -> MODERATE
+    - else -> LOW
+    """
+    rainfall = float(features.get("rainfall", 0.0) or 0.0)
+    humidity = float(features.get("humidity", 0.0) or 0.0)
+    wind_speed = float(features.get("wind_speed", 0.0) or 0.0)
+
+    if rainfall > 20.0 or (humidity > 90.0 and wind_speed > 8.0) or rainfall > 25.0:
+        risk = "HIGH"
+        prob = 0.88
+    elif rainfall > 5.0 or humidity > 70.0 or wind_speed > 6.0:
+        risk = "MODERATE"
+        prob = 0.75
+    else:
+        risk = "LOW"
+        prob = 0.95
+
+    return {
+        "risk_level": risk,
+        "probability": prob,
     }
 
+
+def generate_actionable_alert(risk_level, rainfall, humidity, wind_speed):
     rain = float(rainfall if rainfall is not None else 0.0)
     hum = float(humidity if humidity is not None else 0.0)
     wind = float(wind_speed if wind_speed is not None else 0.0)
+    risk = str(risk_level).upper()
 
-    if rain > 25:
-        alert = {
-            "type": "FLASH_FLOOD",
-            "severity": "HIGH",
-            "action": "Move people from low-lying areas. Activate drainage systems."
+    if risk == "HIGH":
+        if rain > 20.0:
+            return {
+                "type": "Flash Flood",
+                "severity": "HIGH",
+                "action": "Immediate evacuation of low-lying areas. Activate emergency drainage systems."
+            }
+        elif hum > 90.0 and wind > 8.0:
+            return {
+                "type": "Thunderstorm",
+                "severity": "HIGH",
+                "action": "Seek structural indoor shelter immediately. Avoid outdoor activities."
+            }
+        else:
+            return {
+                "type": "High Risk",
+                "severity": "HIGH",
+                "action": "Avoid non-essential travel and monitor emergency civil defense bulletins."
+            }
+    elif risk == "MODERATE":
+        if rain > 5.0:
+            return {
+                "type": "Heavy Rain",
+                "severity": "MODERATE",
+                "action": "Monitor local water drainage and exercise caution on roadways."
+            }
+        elif wind > 6.0:
+            return {
+                "type": "Thunderstorm Watch",
+                "severity": "MODERATE",
+                "action": "Secure outdoor objects and monitor convective cloud formations."
+            }
+        else:
+            return {
+                "type": "Moderate Risk",
+                "severity": "MODERATE",
+                "action": "Moderate atmospheric indicators observed. Stay updated with local advisories."
+            }
+    else:
+        return {
+            "type": "Normal",
+            "severity": "LOW",
+            "action": "No immediate defensive action required."
         }
-
-    elif hum > 90 and wind > 10:
-        alert = {
-            "type": "THUNDERSTORM",
-            "severity": "HIGH",
-            "action": "Avoid outdoor activities. Secure loose structures."
-        }
-
-    elif rain > 10:
-        alert = {
-            "type": "MODERATE_RAIN",
-            "severity": "MEDIUM",
-            "action": "Monitor water levels and drainage systems."
-        }
-
-    return alert
 
 
 def generate_alerts(cities_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -367,231 +440,222 @@ def predict_risk(request: PredictionRequest):
     }
 
 
-@app.get("/batch_predict")
-async def batch_predict(limit: int = 100, state: Optional[str] = None):
+# ============================================================
+# UNIFIED ALERTS ENGINE — SINGLE SOURCE OF TRUTH (5-MIN CACHE)
+# ============================================================
+
+_UNIFIED_ALERTS_CACHE: Optional[Dict[str, Any]] = None
+_UNIFIED_ALERTS_CACHE_TIME: float = 0.0
+UNIFIED_CACHE_TTL = 300.0  # 5 minutes stable cache
+_UNIFIED_LOCK = asyncio.Lock()
+
+
+async def get_unified_alerts_dataset() -> Dict[str, Any]:
     """
-    Real-Time Batch Monitoring Pipeline with Realistic Weather & Smart In-Memory Caching:
-    - Expiry: 300 seconds (5 minutes)
-    - Consistency across all requests (no random.uniform)
-    - Real-time weather with safe fallback mock
+    SINGLE SOURCE OF TRUTH Alert Engine:
+    - Pipeline: get_weather -> engineer_features -> predict_nowcast -> generate_actionable_alert
+    - 100% deterministic (no random values, consistent fallback mock)
+    - Deduplicates locations strictly by city name
+    - Caches for 5 minutes (300 seconds) so counts never flicker or diverge on refresh
+    - Precomputes summary: { total, high, moderate, low }
     """
-    safe_limit = min(max(1, limit), 2000)
-    cache_key = f"{safe_limit}_{state or 'all'}"
+    global _UNIFIED_ALERTS_CACHE, _UNIFIED_ALERTS_CACHE_TIME
     now_ts = time.time()
+    if _UNIFIED_ALERTS_CACHE is not None and (now_ts - _UNIFIED_ALERTS_CACHE_TIME) < UNIFIED_CACHE_TTL:
+        return _UNIFIED_ALERTS_CACHE
 
-    if cache_key in _CACHE:
-        cached, ts = _CACHE[cache_key]
-        if now_ts - ts < CACHE_TTL:
-            return cached
+    async with _UNIFIED_LOCK:
+        now_ts = time.time()
+        if _UNIFIED_ALERTS_CACHE is not None and (now_ts - _UNIFIED_ALERTS_CACHE_TIME) < UNIFIED_CACHE_TTL:
+            return _UNIFIED_ALERTS_CACHE
 
-    locations = get_sampled_locations(limit=safe_limit, state=state)
-    semaphore = asyncio.Semaphore(15)
+        raw_locations = get_sampled_locations(limit=100)
+        # Deduplicate strictly by lowercase city name key
+        seen_cities = set()
+        locations = []
+        for loc in raw_locations:
+            c_name = loc["city"].strip()
+            ck = c_name.lower()
+            if ck not in seen_cities:
+                seen_cities.add(ck)
+                locations.append(loc)
 
-    async def fetch_one(client: httpx.AsyncClient, loc: Dict[str, Any]) -> Dict[str, Any]:
-        async with semaphore:
-            return await async_fetch_weather(city=loc["city"], lat=loc["lat"], lon=loc["lon"], client=client)
+        semaphore = asyncio.Semaphore(15)
 
-    async with httpx.AsyncClient(timeout=3.5) as client:
-        weather_list = await asyncio.gather(*[fetch_one(client, loc) for loc in locations])
+        async def fetch_one(client: httpx.AsyncClient, loc: Dict[str, Any]) -> Dict[str, Any]:
+            async with semaphore:
+                return await async_fetch_weather(city=loc["city"], lat=loc["lat"], lon=loc["lon"], client=client)
 
-    now = datetime.now()
-    current_time_iso = now.isoformat()
-    try:
-        ml_predictions = batch_predict_v2(locations, month=now.month, day=now.day)
-    except Exception:
-        ml_predictions = []
+        async with httpx.AsyncClient(timeout=3.5) as client:
+            weather_list = await asyncio.gather(*[fetch_one(client, loc) for loc in locations])
 
-    results = []
+        current_time_iso = datetime.now().isoformat()
+        alerts_list = []
+        high_count = 0
+        moderate_count = 0
+        low_count = 0
 
-    for i, loc in enumerate(locations):
-        w = weather_list[i] if i < len(weather_list) else {}
-        city_name = loc["city"]
-        state_name = loc.get("state", "India")
+        for i, loc in enumerate(locations):
+            w = weather_list[i] if i < len(weather_list) else {}
+            city = loc["city"]
+            state = loc.get("state", "India")
+            lat = loc["lat"]
+            lon = loc["lon"]
 
-        # Use ONLY cached or fetched data from async_fetch_weather (no random.uniform)
-        rainfall = float(w.get("rainfall", 0.0))
-        wind = float(w.get("wind_speed", w.get("wind", 2.0)))
-        temp = float(w.get("temperature", 30.0))
-        hum = float(w.get("humidity", 70.0))
-        pressure = float(w.get("pressure", 1010.0))
+            temp = float(w.get("temperature", 30.0))
+            hum = float(w.get("humidity", 70.0))
+            rain = float(w.get("rainfall", 0.0))
+            wind = float(w.get("wind_speed", w.get("wind", 2.0)))
+            pressure = float(w.get("pressure", 1010.0))
 
-        # Strict Rule Calculation directly on fetched/cached weather
-        risk_level, risk_label = calculate_rule_risk(rainfall, hum, wind)
-
-        # ML Prediction with rule-based fallback
-        if i < len(ml_predictions):
-            ml_pred = ml_predictions[i]
-        else:
-            ml_pred = {
-                "risk_label": risk_label,
-                "risk_level": risk_level,
-                "confidence": 0.85 if risk_level == "HIGH" else (0.75 if risk_level == "MODERATE" else 0.65),
-                "probabilities": {
-                    "LOW": 0.15 if risk_level == "HIGH" else (0.25 if risk_level == "MODERATE" else 0.70),
-                    "MODERATE": 0.25 if risk_level == "HIGH" else (0.55 if risk_level == "MODERATE" else 0.20),
-                    "HIGH": 0.60 if risk_level == "HIGH" else (0.20 if risk_level == "MODERATE" else 0.10)
-                }
-            }
-
-        hybrid_pred = compute_hybrid_risk(
-            rainfall=rainfall,
-            ml_prediction=ml_pred,
-            wind_speed=wind,
-            temperature=temp,
-            humidity=hum,
-            state=state_name,
-            city=city_name,
-        )
-
-        # Ensure rule priority consistency
-        if risk_label > hybrid_pred.get("risk_label", 0):
-            hybrid_pred["risk_level"] = risk_level
-            hybrid_pred["risk_label"] = risk_label
-            hybrid_pred["risk_text"] = risk_level
-
-        final_risk = hybrid_pred.get("risk_level", risk_level)
-        final_label = hybrid_pred.get("risk_label", risk_label)
-
-        p_thunder = float(hybrid_pred.get("thunderstorm", 0.75 if final_risk == "HIGH" else (0.45 if final_risk == "MODERATE" else 0.12)))
-        p_cloud = float(hybrid_pred.get("cloudburst", 0.70 if final_risk == "HIGH" else (0.35 if final_risk == "MODERATE" else 0.08)))
-        p_flood = float(hybrid_pred.get("flood", 0.80 if final_risk == "HIGH" else (0.40 if final_risk == "MODERATE" else 0.05)))
-
-        if final_risk == "HIGH":
-            p_thunder = max(p_thunder, 0.72)
-            p_cloud = max(p_cloud, 0.68)
-            p_flood = max(p_flood, 0.75)
-        elif final_risk == "MODERATE":
-            p_thunder = max(p_thunder, 0.42)
-            p_cloud = max(p_cloud, 0.38)
-            p_flood = max(p_flood, 0.35)
-
-        alert = get_alert(hybrid_pred)
-        reason = generate_explainable_reason(rainfall, hum, wind, final_risk)
-        actionable_alert = generate_actionable_alert(
-            final_risk,
-            rainfall,
-            hum,
-            wind
-        )
-
-        results.append({
-            "city": loc["city"],
-            "state": state_name,
-            "lat": loc["lat"],
-            "lon": loc["lon"],
-            "risk_level": final_risk,
-            "risk": final_risk,
-            "temperature": round(temp, 1),
-            "humidity": round(hum, 1),
-            "rainfall": round(rainfall, 1),
-            "wind_speed": round(wind, 1),
-            "timestamp": current_time_iso,
-            "reason": reason,
-            "alert": actionable_alert,
-            "probabilities": {
-                "thunderstorm": round(p_thunder, 2),
-                "cloudburst": round(p_cloud, 2),
-                "flash_flood": round(p_flood, 2),
-            },
-            "explanation": hybrid_pred.get("explanation"),
-            "weather": {
+            weather_obj = {
+                "city": city,
+                "lat": lat,
+                "lon": lon,
                 "temperature": round(temp, 1),
                 "humidity": round(hum, 1),
-                "rainfall": round(rainfall, 1),
+                "rainfall": round(rain, 1),
                 "wind_speed": round(wind, 1),
-                "wind": round(wind, 1),
                 "pressure": round(pressure, 1),
-            },
-            "prediction": {
-                "prob_thunderstorm": round(p_thunder, 2),
-                "prob_cloudburst": round(p_cloud, 2),
-                "prob_flood": round(p_flood, 2),
-                "thunderstorm": round(p_thunder, 2),
-                "cloudburst": round(p_cloud, 2),
-                "flood": round(p_flood, 2),
-                **hybrid_pred,
-                "risk_level": final_risk,
-                "risk_label": final_label,
+                "timestamp": current_time_iso,
+            }
+
+            # Pipeline step 1: Engineer features
+            features = engineer_features(weather_obj)
+
+            # Pipeline step 2: Predict nowcast
+            pred = predict_nowcast(features)
+            risk = pred["risk_level"]
+
+            # Pipeline step 3: Generate actionable alert
+            actionable = generate_actionable_alert(risk, rain, hum, wind)
+            sev = actionable["severity"]
+
+            if sev == "HIGH":
+                high_count += 1
+            elif sev == "MODERATE":
+                moderate_count += 1
+            else:
+                low_count += 1
+
+            p_flood = round(0.85 if risk == "HIGH" else (0.45 if risk == "MODERATE" else 0.08), 2)
+            p_thunder = round(0.80 if risk == "HIGH" else (0.40 if risk == "MODERATE" else 0.12), 2)
+            p_cloud = round(0.75 if risk == "HIGH" else (0.35 if risk == "MODERATE" else 0.05), 2)
+
+            reason = generate_explainable_reason(rain, hum, wind, risk)
+
+            alert_item = {
+                "id": i,
+                "city": city,
+                "fullName": city,
+                "state": state,
+                "lat": lat,
+                "lon": lon,
+                "risk_level": risk,
+                "risk": risk,
+                "severity": sev,
+                "type": actionable["type"],
+                "hazard": actionable["type"],
+                "message": f"{actionable['type']} in {city} (Rain: {rain:.1f} mm, Wind: {wind:.1f} m/s)",
+                "action": actionable["action"],
                 "reason": reason,
-            },
-            "alerts": alert,
-        })
+                "temperature": round(temp, 1),
+                "humidity": round(hum, 1),
+                "rainfall": round(rain, 1),
+                "wind_speed": round(wind, 1),
+                "timestamp": current_time_iso,
+                "weather": {
+                    "temperature": round(temp, 1),
+                    "humidity": round(hum, 1),
+                    "rainfall": round(rain, 1),
+                    "wind_speed": round(wind, 1),
+                    "wind": round(wind, 1),
+                    "pressure": round(pressure, 1),
+                },
+                "prediction": {
+                    "risk_level": risk,
+                    "risk_label": 2 if risk == "HIGH" else (1 if risk == "MODERATE" else 0),
+                    "risk_text": risk,
+                    "probability": pred.get("probability", 0.85),
+                    "prob_flood": p_flood,
+                    "prob_thunderstorm": p_thunder,
+                    "prob_cloudburst": p_cloud,
+                    "reason": reason,
+                },
+                "probabilities": {
+                    "flash_flood": p_flood,
+                    "thunderstorm": p_thunder,
+                    "cloudburst": p_cloud,
+                },
+                "alert": actionable,
+            }
+            alerts_list.append(alert_item)
 
-    # Sort results with HIGH risk first
-    results.sort(
-        key=lambda x: (x["prediction"]["risk_label"], x["probabilities"]["flash_flood"]),
-        reverse=True,
-    )
+        # Sort results: HIGH risk first, then MODERATE, then LOW
+        alerts_list.sort(key=lambda x: (
+            2 if x["severity"] == "HIGH" else (1 if x["severity"] == "MODERATE" else 0),
+            x["rainfall"]
+        ), reverse=True)
 
-    _CACHE[cache_key] = (results, now_ts)
-    return results
+        summary = {
+            "total": len(alerts_list),
+            "high": high_count,
+            "moderate": moderate_count,
+            "low": low_count,
+        }
+
+        dataset = {
+            "summary": summary,
+            "alerts": alerts_list,
+            "last_updated": current_time_iso,
+        }
+
+        _UNIFIED_ALERTS_CACHE = dataset
+        _UNIFIED_ALERTS_CACHE_TIME = time.time()
+        return _UNIFIED_ALERTS_CACHE
 
 
 @app.get("/alerts")
 async def get_alerts():
     """
-    Dynamic Alerts Feed API:
-    Generates real-time national warnings compiled from current batch telemetry.
+    Unified Alerts API (Single Source of Truth):
+    Returns precomputed summary, deduplicated alerts, and cached timestamp.
     """
-    # Use cached or fresh batch prediction data for India
-    batch_data = await batch_predict(limit=100)
-    alerts = generate_alerts(batch_data)
-    return {
-        "alerts": alerts,
-        "total": len(alerts),
-        "timestamp": datetime.now().isoformat()
-    }
+    return await get_unified_alerts_dataset()
 
 
-# ============================================================
-# REAL-TIME NOWCASTING PIPELINE (ANY CITY)
-# ============================================================
-
-def engineer_features(data: Dict[str, Any]) -> Dict[str, Any]:
+@app.get("/dashboard")
+async def get_dashboard():
     """
-    Feature Engineering for Real-Time Nowcasting:
-    - moisture_index = humidity * rainfall
-    - instability_index = temperature * humidity
-    - rain_intensity = rainfall * wind_speed
+    Unified Dashboard Feed API:
+    Shares the exact same alerts and summary dataset as /alerts.
     """
-    humidity = float(data.get("humidity", 0.0) or 0.0)
-    rainfall = float(data.get("rainfall", 0.0) or 0.0)
-    temperature = float(data.get("temperature", 0.0) or 0.0)
-    wind_speed = float(data.get("wind_speed", 0.0) or 0.0)
-
-    moisture_index = round(humidity * rainfall, 2)
-    instability_index = round(temperature * humidity, 2)
-    rain_intensity = round(rainfall * wind_speed, 2)
-
-    features = dict(data)
-    features.update({
-        "moisture_index": moisture_index,
-        "instability_index": instability_index,
-        "rain_intensity": rain_intensity,
-    })
-    return features
+    return await get_unified_alerts_dataset()
 
 
-def predict_nowcast(features: Dict[str, Any]) -> Dict[str, Any]:
+@app.get("/analytics")
+async def get_analytics():
     """
-    Pluggable Nowcast Prediction Pipeline:
-    - rainfall > 25 -> HIGH
-    - rainfall > 10 -> MODERATE
-    - else          -> LOW
+    Unified Analytics Feed API:
+    Shares the exact same alerts and summary dataset as /alerts.
     """
-    rainfall = float(features.get("rainfall", 0.0) or 0.0)
+    return await get_unified_alerts_dataset()
 
-    if rainfall > 25:
-        risk = "HIGH"
-    elif rainfall > 10:
-        risk = "MODERATE"
-    else:
-        risk = "LOW"
 
-    return {
-        "risk_level": risk,
-        "probability": 0.85,
-    }
+@app.get("/batch_predict")
+async def batch_predict(limit: int = 100, state: Optional[str] = None):
+    """
+    Batch Monitoring API:
+    Backed by the unified alert dataset to maintain 100% consistency across pages.
+    """
+    dataset = await get_unified_alerts_dataset()
+    alerts = dataset["alerts"]
+    if state:
+        st_lower = state.strip().lower()
+        filtered = [a for a in alerts if a.get("state", "").lower() == st_lower]
+        return filtered[:limit]
+    return alerts[:limit]
+
 
 
 @app.get("/nowcast")

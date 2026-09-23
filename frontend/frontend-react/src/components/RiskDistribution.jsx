@@ -1,31 +1,28 @@
 import React from 'react';
 
-const RiskDistribution = ({ locations = [], allCitiesData = [] }) => {
-    const list = locations.length > 0 ? locations : allCitiesData;
-    let critical = 0, high = 0, medium = 0, low = 0;
-    
-    list.forEach(city => {
-        const risk = (city.risk_level || city.risk || city.prediction?.risk_text || "LOW").toUpperCase();
-        const rain = Number(city.weather?.rainfall || 0);
-        
-        if (risk === "HIGH") {
-            if (rain > 25.0) {
-                critical++;
-            } else {
+const RiskDistribution = ({ locations = [], allCitiesData = [], summary = null }) => {
+    let high = 0, medium = 0, low = 0, total = 0;
+
+    if (summary != null) {
+        // Backend Single Source of Truth
+        high = summary.high ?? 0;
+        medium = summary.moderate ?? 0;
+        low = summary.low ?? 0;
+        total = summary.total ?? (high + medium + low);
+    } else {
+        const list = locations.length > 0 ? locations : allCitiesData;
+        list.forEach(city => {
+            const risk = (city.risk_level || city.risk || city.prediction?.risk_text || "LOW").toUpperCase();
+            if (risk === "HIGH") {
                 high++;
+            } else if (risk === "MODERATE") {
+                medium++;
+            } else {
+                low++;
             }
-        } else if (risk === "MODERATE") {
-            medium++;
-        } else {
-            low++;
-        }
-    });
-
-    if (list.length === 0) {
-        critical = 0; high = 0; medium = 0; low = 0;
+        });
+        total = high + medium + low;
     }
-
-    const total = critical + high + medium + low;
 
     return (
         <div className="h-full bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between">
@@ -37,15 +34,15 @@ const RiskDistribution = ({ locations = [], allCitiesData = [] }) => {
             <div className="flex items-center justify-between gap-2.5 mt-2">
                 <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl p-2.5 flex flex-col items-center justify-center">
                     <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-2.5 h-2.5 rounded-full bg-red-600 shadow-sm shadow-red-500/50"></div>
-                        <span className="text-xl font-black text-slate-800 dark:text-white leading-none">{critical}</span>
+                        <div className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-sm shadow-blue-500/50"></div>
+                        <span className="text-xl font-black text-slate-800 dark:text-white leading-none">{total}</span>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Critical</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Total</span>
                 </div>
-                
+
                 <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl p-2.5 flex flex-col items-center justify-center">
                     <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-2.5 h-2.5 rounded-full bg-orange-500 shadow-sm shadow-orange-500/50"></div>
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-600 shadow-sm shadow-red-500/50"></div>
                         <span className="text-xl font-black text-slate-800 dark:text-white leading-none">{high}</span>
                     </div>
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">High</span>
@@ -53,10 +50,10 @@ const RiskDistribution = ({ locations = [], allCitiesData = [] }) => {
                 
                 <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl p-2.5 flex flex-col items-center justify-center">
                     <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-sm shadow-yellow-400/50"></div>
+                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></div>
                         <span className="text-xl font-black text-slate-800 dark:text-white leading-none">{medium}</span>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Medium</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Moderate</span>
                 </div>
                 
                 <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl p-2.5 flex flex-col items-center justify-center">

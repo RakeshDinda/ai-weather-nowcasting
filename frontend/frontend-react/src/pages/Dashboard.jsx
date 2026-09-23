@@ -11,6 +11,7 @@ import RiskDistribution from '../components/RiskDistribution';
 const Dashboard = () => {
     // 1. Single Source of Truth States
     const [allCities, setAllCities] = useState([]);
+    const [summary, setSummary] = useState({ total: 0, high: 0, moderate: 0, low: 0 });
     const [selectedCity, setSelectedCity] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -31,23 +32,28 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch("http://127.0.0.1:8000/batch_predict?limit=100");
+            // Fetch ONLY from /alerts — SINGLE SOURCE OF TRUTH
+            const response = await fetch("http://127.0.0.1:8000/alerts");
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
 
             const data = await response.json();
-            console.log("BATCH API RESPONSE:", data);
+            const summaryData = data.summary || { total: 0, high: 0, moderate: 0, low: 0 };
+            setSummary(summaryData);
 
-            const formatted = data.map((item, index) => ({
+            const alertsData = data.alerts || (Array.isArray(data) ? data : []);
+            console.log("ALERTS API RESPONSE:", summaryData, "Total alerts:", alertsData.length);
+
+            const formatted = alertsData.map((item, index) => ({
                 id: index,
                 city: item.city,
                 fullName: item.city,
                 state: item.state,
                 lat: item.lat,
                 lon: item.lon,
-                risk: (item.risk_level || item.risk || "LOW").toUpperCase(),
-                risk_level: (item.risk_level || item.risk || "LOW").toUpperCase(),
+                risk: (item.risk_level || item.risk || item.severity || "LOW").toUpperCase(),
+                risk_level: (item.risk_level || item.risk || item.severity || "LOW").toUpperCase(),
                 weather: item.weather || {
                     temperature: item.temperature,
                     humidity: item.humidity,
@@ -238,6 +244,7 @@ const Dashboard = () => {
                 onSearch={handleSearch} 
                 searchLoading={searchLoading} 
                 selectedCity={selectedCity?.city} 
+                alertCount={summary?.high}
             />
             
             <div className="flex flex-1 overflow-hidden">
@@ -281,9 +288,9 @@ const Dashboard = () => {
                         {/* Top Hero Banner */}
                         <HeroBanner cityData={selectedCity} />
                         
-                        {/* Alert Banner: Pure component using central locations */}
+                        {/* Alert Banner: Pure component using backend single source of truth summary */}
                         <div className="px-6 pt-4">
-                            <AlertBanner locations={allCities} />
+                            <AlertBanner locations={allCities} summary={summary} />
                         </div>
                         
                         {/* Interactive Main Map & Right Panel */}
@@ -350,7 +357,7 @@ const Dashboard = () => {
                                 <Timeline />
                             </div>
                             <div className="w-[360px] flex-shrink-0">
-                                <RiskDistribution locations={allCities} />
+                                <RiskDistribution locations={allCities} summary={summary} />
                             </div>
                         </div>
                     </div>
