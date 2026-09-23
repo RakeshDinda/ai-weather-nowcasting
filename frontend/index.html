@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>India Weather Early Warning System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="header">
+            <h1>Early Warning System</h1>
+            <p>AI-Driven Hyper-Local Severe Weather Nowcasting for India</p>
+        </header>
+        
+        <!-- Input Section -->
+        <div class="search-section">
+            <input type="text" id="cityInput" placeholder="Enter custom city (e.g. Surat)" />
+            <button id="checkRiskBtn">Check Risk</button>
+            <button id="monitorAllBtn" class="monitor-btn">Monitor India</button>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="loading" class="hidden">Analyzing weather patterns & generating predictions...</div>
+        <div id="error" class="error-msg hidden"></div>
+
+        <!-- Single City Results -->
+        <div id="results" class="results-grid hidden">
+            <!-- Live Weather Data Card -->
+            <div class="card weather-card">
+                <h2>City: <span id="resCity" style="color: #60a5fa;"></span></h2>
+                <div class="weather-metrics">
+                    <div class="metric">
+                        <span class="label">Temperature</span>
+                        <span class="value" id="resTemp">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Humidity</span>
+                        <span class="value" id="resHumidity">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Wind Speed</span>
+                        <span class="value" id="resWind">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Rainfall</span>
+                        <span class="value" id="resRain">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ML Alerts Card -->
+            <div class="card alerts-card">
+                <h2>Machine Learning Risk Assessment</h2>
+                <div class="alert-item" id="alertFlood">
+                    <span class="event-name">Flood Risk</span>
+                    <span class="risk-level" id="riskFlood">--</span>
+                </div>
+                <div class="alert-item" id="alertThunderstorm">
+                    <span class="event-name">Thunderstorm Risk</span>
+                    <span class="risk-level" id="riskThunderstorm">--</span>
+                </div>
+                <div class="alert-item" id="alertCloudburst">
+                    <span class="event-name">Cloudburst Risk</span>
+                    <span class="risk-level" id="riskCloudburst">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Multi-City Monitor Results -->
+        <div id="resultsGrid" class="multi-grid hidden">
+            <!-- Dynamic cards injected via JS -->
+        </div>
+
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

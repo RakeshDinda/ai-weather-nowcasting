@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 transition-colors duration-300;
+  }
+  
+  .dark body {
+    @apply bg-slate-900 text-slate-50;
+  }
+}
+
+/* Custom map styling to ensure Leaflet renders correctly */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.75rem;
+  z-index: 10;
+}
+
+.location-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Disaster Command Center Animations */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: inline-flex;
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes riskWave {
+  0%, 100% {
+    transform: scaleY(0.25);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.animate-risk-wave {
+  animation: riskWave ease-in-out infinite;
+  transform-origin: bottom;
+}
