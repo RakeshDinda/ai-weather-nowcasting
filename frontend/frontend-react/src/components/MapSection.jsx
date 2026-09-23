@@ -113,6 +113,7 @@ const MapSection = ({
                 spiderfyOnMaxZoom={true}
                 maxClusterRadius={40}
                 animate={true}
+                removeOutsideVisibleBounds={true}
             >
                 {locations.length > 0 && locations.map((loc, idx) => {
                     if (!loc.lat || !loc.lon) return null;
@@ -120,7 +121,7 @@ const MapSection = ({
                     
                     return (
                         <Marker
-                            key={loc.id ?? idx}
+                            key={loc.city ? `marker-${loc.city}` : `marker-${loc.id ?? idx}`}
                             position={[loc.lat, loc.lon]}
                             icon={createStationIcon(loc.risk)}
                             eventHandlers={{

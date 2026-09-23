@@ -68,7 +68,10 @@ const Sidebar = ({
                         <FileText size={18} />
                         <span className="text-sm">Reports</span>
                     </NavLink>
-                    <Link to="/analytics" className={navLinkClass}>
+                    <Link 
+                        to="/analytics" 
+                        className="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl font-semibold transition-colors"
+                    >
                         <Settings size={18} />
                         <span className="text-sm">Settings</span>
                     </Link>

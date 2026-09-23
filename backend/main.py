@@ -444,32 +444,38 @@ def predict_risk(request: PredictionRequest):
 # UNIFIED ALERTS ENGINE — SINGLE SOURCE OF TRUTH (5-MIN CACHE)
 # ============================================================
 
-_UNIFIED_ALERTS_CACHE: Optional[Dict[str, Any]] = None
-_UNIFIED_ALERTS_CACHE_TIME: float = 0.0
+_UNIFIED_ALERTS_CACHE: Dict[int, Tuple[Dict[str, Any], float]] = {}
 UNIFIED_CACHE_TTL = 300.0  # 5 minutes stable cache
 _UNIFIED_LOCK = asyncio.Lock()
 
 
-async def get_unified_alerts_dataset() -> Dict[str, Any]:
+async def get_unified_alerts_dataset(limit: int = 200) -> Dict[str, Any]:
     """
     SINGLE SOURCE OF TRUTH Alert Engine:
     - Pipeline: get_weather -> engineer_features -> predict_nowcast -> generate_actionable_alert
     - 100% deterministic (no random values, consistent fallback mock)
     - Deduplicates locations strictly by city name
     - Caches for 5 minutes (300 seconds) so counts never flicker or diverge on refresh
+    - Configurable zones limit (default 200, safely capped at 300)
     - Precomputes summary: { total, high, moderate, low }
     """
-    global _UNIFIED_ALERTS_CACHE, _UNIFIED_ALERTS_CACHE_TIME
+    global _UNIFIED_ALERTS_CACHE
+    safe_limit = min(max(10, limit), 300)
     now_ts = time.time()
-    if _UNIFIED_ALERTS_CACHE is not None and (now_ts - _UNIFIED_ALERTS_CACHE_TIME) < UNIFIED_CACHE_TTL:
-        return _UNIFIED_ALERTS_CACHE
+
+    if safe_limit in _UNIFIED_ALERTS_CACHE:
+        cached_data, cache_time = _UNIFIED_ALERTS_CACHE[safe_limit]
+        if (now_ts - cache_time) < UNIFIED_CACHE_TTL:
+            return cached_data
 
     async with _UNIFIED_LOCK:
         now_ts = time.time()
-        if _UNIFIED_ALERTS_CACHE is not None and (now_ts - _UNIFIED_ALERTS_CACHE_TIME) < UNIFIED_CACHE_TTL:
-            return _UNIFIED_ALERTS_CACHE
+        if safe_limit in _UNIFIED_ALERTS_CACHE:
+            cached_data, cache_time = _UNIFIED_ALERTS_CACHE[safe_limit]
+            if (now_ts - cache_time) < UNIFIED_CACHE_TTL:
+                return cached_data
 
-        raw_locations = get_sampled_locations(limit=100)
+        raw_locations = get_sampled_locations(limit=safe_limit)
         # Deduplicate strictly by lowercase city name key
         seen_cities = set()
         locations = []
@@ -480,7 +486,7 @@ async def get_unified_alerts_dataset() -> Dict[str, Any]:
                 seen_cities.add(ck)
                 locations.append(loc)
 
-        semaphore = asyncio.Semaphore(15)
+        semaphore = asyncio.Semaphore(25)
 
         async def fetch_one(client: httpx.AsyncClient, loc: Dict[str, Any]) -> Dict[str, Any]:
             async with semaphore:
@@ -610,45 +616,53 @@ async def get_unified_alerts_dataset() -> Dict[str, Any]:
             "last_updated": current_time_iso,
         }
 
-        _UNIFIED_ALERTS_CACHE = dataset
-        _UNIFIED_ALERTS_CACHE_TIME = time.time()
-        return _UNIFIED_ALERTS_CACHE
+        _UNIFIED_ALERTS_CACHE[safe_limit] = (dataset, time.time())
+        return dataset
 
 
 @app.get("/alerts")
-async def get_alerts():
+async def get_alerts(limit: int = 200):
     """
     Unified Alerts API (Single Source of Truth):
     Returns precomputed summary, deduplicated alerts, and cached timestamp.
     """
-    return await get_unified_alerts_dataset()
+    return await get_unified_alerts_dataset(limit=limit)
+
+
+@app.get("/zones")
+async def get_zones(limit: int = 200):
+    """
+    Configurable Zones API:
+    Returns cached zones dataset with summary and location alerts.
+    """
+    return await get_unified_alerts_dataset(limit=limit)
 
 
 @app.get("/dashboard")
-async def get_dashboard():
+async def get_dashboard(limit: int = 200):
     """
     Unified Dashboard Feed API:
     Shares the exact same alerts and summary dataset as /alerts.
     """
-    return await get_unified_alerts_dataset()
+    return await get_unified_alerts_dataset(limit=limit)
 
 
 @app.get("/analytics")
-async def get_analytics():
+async def get_analytics(limit: int = 200):
     """
     Unified Analytics Feed API:
     Shares the exact same alerts and summary dataset as /alerts.
     """
-    return await get_unified_alerts_dataset()
+    return await get_unified_alerts_dataset(limit=limit)
 
 
 @app.get("/batch_predict")
-async def batch_predict(limit: int = 100, state: Optional[str] = None):
+async def batch_predict(limit: int = 200, state: Optional[str] = None):
     """
     Batch Monitoring API:
     Backed by the unified alert dataset to maintain 100% consistency across pages.
     """
-    dataset = await get_unified_alerts_dataset()
+    dataset = await get_unified_alerts_dataset(limit=limit)
     alerts = dataset["alerts"]
     if state:
         st_lower = state.strip().lower()
