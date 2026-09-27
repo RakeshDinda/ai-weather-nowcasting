@@ -1,0 +1,24 @@
+# ==============================================================================
+# AI Weather Nowcasting & Early Warning System - Backend Dependencies
+# Compatibility: Python 3.10+
+# ==============================================================================
+
+# Core Web Framework & ASGI Server
+fastapi>=0.110.0,<1.0.0
+uvicorn[standard]>=0.29.0,<1.0.0
+pydantic>=2.6.0,<3.0.0
+
+# Environment Configuration
+python-dotenv>=1.0.0,<2.0.0
+
+# HTTP Clients (Synchronous & Asynchronous Weather Telemetry API Fetching)
+requests>=2.31.0,<3.0.0
+httpx>=0.27.0,<1.0.0
+
+# Data Engineering & Numerical Processing
+numpy>=1.26.0,<3.0.0
+pandas>=2.1.0,<4.0.0
+
+# Machine Learning & Model Persistence
+scikit-learn>=1.4.0,<2.0.0
+joblib>=1.3.0,<2.0.0

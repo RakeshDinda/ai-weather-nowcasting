@@ -1,170 +1,171 @@
-# AI Weather Nowcasting System
+# 🌦️ AI Weather Nowcasting & Early Warning System
 
-Hyper-local, real-time severe weather risk prediction and early warning intelligence platform for India.
-
----
-
-## 1. Project Overview
-
-The **AI Weather Nowcasting System** is a production-grade, real-time weather risk prediction and early warning intelligence platform. It continuously monitors hundreds of zones across India, analyzes real-time meteorological metrics, and categorizes localized threats into actionable risk levels: **High**, **Moderate**, and **Low**. 
-
-By focusing on rapid nowcasting (0 to 6 hours), the system delivers immediate, high-fidelity alerts for critical convective weather events such as thunderstorms, cloudbursts, and flash floods before they cause severe damage to communities and infrastructure.
+An intelligent, real-time meteorological monitoring and short-term risk prediction platform designed to detect hyper-local severe weather threats and generate actionable early warnings before disaster strikes.
 
 ---
 
-## 2. Problem Statement
+## 🚀 Overview
 
-Traditional regional weather forecasts operate on macro-scale geographical grids and update over extended intervals (6 to 24 hours). This creates serious vulnerabilities during severe convective weather events:
-- **Delayed Warnings**: Sudden meteorological anomalies like cloudbursts and flash floods develop within minutes, often striking before conventional warnings are issued.
-- **Lack of Hyper-Local Granularity**: City-wide or district-wide alerts fail to identify which municipal ward, coastal zone, or river basin is at imminent risk.
-- **Data Inconsistencies & Fragmented Feeds**: Emergency personnel and citizens often face conflicting reports across disparate sources.
-- **High Disaster Vulnerability**: Delayed evacuations, uncoordinated traffic diversions, and unprepared civic drainage systems lead to avoidable loss of lives, livelihoods, and public infrastructure.
+### The Problem
+Extreme and localized weather anomalies—such as cloudbursts, severe thunderstorms, and sudden flash floods—develop within short windows of 30 to 120 minutes. Traditional numerical weather models are designed for macro-scale forecasts spanning 24 to 48 hours over entire districts or states. They lack the hyper-local precision and rapid update frequency needed to detect micro-scale convective events. Furthermore, conventional weather apps report raw technical metrics (e.g., pressure in hPa or humidity percentages) without translating them into immediate, life-saving actions. This leaves citizens, municipal administrators, and emergency responders unprepared during rapid climate escalations.
 
----
-
-## 3. Solution
-
-The AI Weather Nowcasting System bridges the critical gap between broad-scale forecasting and hyper-local emergency response:
-- **Single Source of Truth Alert Engine**: A centralized pipeline aggregates real-time weather telemetry, computes automated risk indicators, and serves unified, deduplicated data across all interfaces.
-- **Instant Risk Classification**: Uses meteorological feature engineering and a calibrated inference engine to detect high-risk thresholds for thunderstorms, cloudbursts, and flash floods.
-- **Dynamic Geospatial Visualization**: Interactive Leaflet maps cluster hundreds of monitoring nodes across India, allowing operators to assess national risk at a glance or inspect street-level coordinates.
-- **Actionable Guidance**: Every alert pairs severity ratings with concrete, emergency-ready directives (e.g., immediate evacuation, clearance of low-lying drains, or halt of outdoor operations).
+### The Solution
+The **AI Weather Nowcasting & Early Warning System** bridges the gap between raw atmospheric telemetry and emergency response. It ingests live weather observations, computes convective instability and moisture indices via automated feature engineering, and uses a calibrated machine learning model alongside domain safety rules to predict localized risk levels (**Low**, **Moderate**, and **High**) for the next 0 to 4 hours. Instead of delivering ambiguous data, the system outputs clear, plain-language actionable advisories directly to an interactive geospatial dashboard.
 
 ---
 
-## 4. Key Features
+## 🎯 Key Features
 
-- **Real-Time Weather Monitoring**: Continuous telemetry tracking for temperature, rainfall rate, humidity, wind speed, pressure, and cloud cover.
-- **AI-Driven Risk Prediction**: Multi-hazard risk assessment classifying events into High, Moderate, and Low tiers.
-- **Interactive Geospatial Map with Clustering**: High-performance Leaflet mapping with dynamic marker clustering, visual risk halos, and smooth flight transitions.
-- **380+ Zones Monitored Simultaneously**: Extensive coverage across all Indian states, union territories, metro hubs, and high-risk climatic belts.
-- **Alerts Command Center**: Dedicated alerts management dashboard with multi-criteria filtering, search, and instant refresh.
-- **Probability Breakdown**: Granular probability bars for thunderstorms, cloudbursts, and flash floods with explainable weather factor analysis.
-- **Professional Dark/Light Mode**: Class-based theme toggle with local storage persistence and zero-flicker reload.
-- **Backend Caching & Rate Protection**: Thread-safe in-memory caching and concurrency semaphores to maintain sub-50ms repeat response times while protecting external API quotas.
+- **Real-Time Weather Ingestion:** Continuously fetches live atmospheric metrics including temperature, relative humidity, precipitation rate, wind speed, and atmospheric pressure via the OpenWeather API.
+- **ML-Based Risk Prediction:** Combines a trained Random Forest classifier with meteorological thresholding to identify hazard tiers while eliminating false alarms during dry weather.
+- **Actionable Alerts System:** Converts numerical hazard scores into concrete defensive directives (e.g., immediate evacuation notices, stormwater pump activation, or indoor shelter advisories).
+- **Scalable Multi-Zone Monitoring:** High-concurrency architecture capable of evaluating up to ~380 geographical zones across India simultaneously.
+- **Interactive Dashboard:** Geospatial mapping built with Leaflet, featuring color-coded threat markers, dynamic fly-to zooming, live telemetry cards, and nationwide risk summaries.
+- **Dark / Light Mode UI:** Built-in theme switcher with persistent local storage state and high-contrast accessibility.
+- **Fault-Tolerant Fallback System:** Deterministic climatological fallback generator ensures zero downtime and consistent testability even during API rate limits or network outages.
 
 ---
 
-## 5. System Architecture
+## 🧠 System Architecture
 
 ```text
-User / Operator
-      │
-      ▼
-Frontend (React 19 + Tailwind CSS + Leaflet)
-      │  HTTP Requests (e.g., /alerts?limit=380)
-      ▼
-Backend API Layer (FastAPI / Uvicorn)
-      │
-      ├── In-Memory Cache (TTL Protection & Concurrency Semaphore)
-      │
-      ▼
-Data Acquisition (Weather Telemetry API / Open-Meteo / Nominatim)
-      │
-      ▼
-Feature Engineering & ML Risk Engine
-      │ (Rainfall intensity, convective lapse rates, humidity thresholds)
-      ▼
-Actionable Alert Generator
-      │ (Severity categorization, emergency instructions, deduplication)
-      ▼
-JSON Response -> Frontend Dashboard & Geospatial Visualizer
+User → Frontend (React) → Backend (FastAPI) → Weather API  
+                                     ↓  
+                                 ML Model  
+                                     ↓  
+                                  Alerts  
 ```
 
-### Layer Breakdown
-- **Presentation Layer**: Built with React, Tailwind CSS, and Lucide icons. Delivers responsive navigation, interactive mapping, live metric cards, and charts.
-- **API & Orchestration Layer**: Powered by FastAPI with asynchronous request handling, query limits, deduplication mechanisms, and thread-safe caching.
-- **Data & Intelligence Layer**: Coordinates real-time API queries, performs atmospheric feature transformation, computes multi-hazard probabilities, and generates actionable advisories.
+### Architectural Layers
+
+- **Presentation Layer (React + Leaflet):** Provides responsive UI, live telemetry visualization, interactive map rendering, and one-click dark/light theme toggles.
+- **API & Orchestration Layer (FastAPI):** Asynchronous ASGI server managing concurrent zone processing, query caching, and parameter validation.
+- **Data Acquisition Layer (OpenWeather API):** Ingests live observational readings; gracefully switches to the deterministic climatological fallback engine if credentials or networks fail.
+- **Intelligence & Alert Layer (Scikit-learn & Rule Engine):** Executes feature engineering, runs inference through the Random Forest model, and synthesizes prioritized actionable directives.
 
 ---
 
-## 6. Data Flow
+## 🔄 Data Flow
+
+The end-to-end data pipeline follows a structured 7-step sequence:
+
+```
+[1. User selects city / zone]
+             │
+             ▼
+[2. Backend fetches live weather data]
+             │
+             ▼
+[3. Feature engineering applied (Moisture Index, Instability Index, Rain Intensity)]
+             │
+             ▼
+[4. ML model & hybrid rules predict risk (Low / Moderate / High)]
+             │
+             ▼
+[5. Actionable alert generated with safety recommendations]
+             │
+             ▼
+[6. Structured JSON payload delivered to frontend]
+             │
+             ▼
+[7. UI updates map markers, detail cards, and alert banner]
+```
+
+1. **User Action:** The user opens the dashboard or searches for a specific location.
+2. **Telemetry Ingestion:** The FastAPI backend fetches live atmospheric readings from OpenWeather or cached nodes.
+3. **Feature Engineering:** Computes composite indices:
+   - $\text{Moisture Index} = \text{Humidity} \times \text{Rainfall}$
+   - $\text{Instability Index} = \text{Temperature} \times \text{Humidity}$
+   - $\text{Rain Intensity} = \text{Rainfall} \times \text{Wind Speed}$
+4. **Model Inference:** Engineered features are passed into the trained ML model (`rainfall_model_v2.pkl`) and checked against domain safety boundaries.
+5. **Alert Synthesis:** The alert engine evaluates the risk severity and attaches actionable safety instructions.
+6. **Data Delivery:** Sanitized JSON payload with coordinates, metrics, risk tier, probabilities, and advice is returned.
+7. **UI Synchronization:** React re-renders map markers, metric cards, and the centralized alert banner in real time.
+
+---
+
+## ⚙️ Tech Stack
+
+### Frontend
+- **React 19** - Modern component-based user interface
+- **Tailwind CSS v4** - Utility-first styling and theme tokens
+- **Vite** - High-speed frontend build tooling and local dev server
+- **React-Leaflet** - Geospatial map rendering and interactive markers
+- **Lucide React** - Clean, modern iconography
+
+### Backend
+- **FastAPI** - Modern, asynchronous, high-performance web framework for Python
+- **Uvicorn** - Production-grade ASGI web server
+- **Pydantic** - Robust request validation and settings management
+- **HTTPX** - High-concurrency asynchronous HTTP client for parallel API calls
+
+### Data & ML
+- **NumPy** - High-performance numerical computations and feature vector processing
+- **Pandas** - Location dataset management and coordinate manipulation
+- **Scikit-learn** - Machine learning classification algorithms (Random Forest)
+- **Joblib** - Fast serialization and loading of trained model artifacts
+
+### APIs & Data Sources
+- **OpenWeather API** - Real-time global atmospheric telemetry
+- **Deterministic Climatological Fallback Engine** - Built-in zero-dependency offline mock
+
+---
+
+## 📦 Project Structure
 
 ```text
-1. User Accesses Dashboard
-   └─ Browser loads React client and initializes theme from localStorage.
-
-2. Frontend Requests Alert Telemetry
-   └─ Client dispatches GET request to `/alerts?limit=380`.
-
-3. Cache Verification
-   └─ FastAPI checks in-memory cache. If fresh (< 380s old), returns instantly.
-
-4. Data Ingestion & Transformation
-   └─ On cache miss, coordinates are gathered, weather data is fetched asynchronously
-      under semaphore concurrency limits.
-
-5. Risk Inference & Alert Synthesis
-   └─ Atmospheric metrics are processed through the nowcasting engine to compute
-      flash flood, cloudburst, and thunderstorm probabilities.
-
-6. Caching & Delivery
-   └─ Normalized records are cached and delivered as a unified payload containing
-      precomputed summary metrics and deduplicated city records.
-
-7. UI Rendering
-   └─ React updates summary metric cards, markers on the Leaflet map cluster,
-      and population alerts simultaneously.
+ai-weather-nowcasting/
+├── backend/          # FastAPI application, route handlers, and API schemas
+├── frontend/         # React client, UI components, Leaflet maps, and Tailwind styles
+├── utils/            # Atmospheric feature engineering, weather fetcher, and alert engines
+├── models/           # Pre-trained machine learning model artifacts (.pkl) and training scripts
+├── scripts/          # Data preprocessing, label recalculation, and model training utilities
+└── data/             # Historical Indian meteorological records and location coordinate CSVs
 ```
 
 ---
 
-## 7. Tech Stack
-
-- **Frontend**:
-  - React 19
-  - Tailwind CSS v4
-  - React Leaflet & Leaflet MarkerCluster
-  - Recharts
-  - Lucide React
-  - Vite
-- **Backend**:
-  - Python 3.10+
-  - FastAPI
-  - Uvicorn (ASGI server)
-  - Pydantic
-- **ML & Logic**:
-  - Python scientific stack (NumPy, Scikit-learn, Pandas)
-  - Atmospheric feature engineering and convective instability scoring
-- **APIs & Data Sources**:
-  - Open-Meteo API
-  - OpenStreetMap Nominatim Geocoding
-- **Architecture & Performance**:
-  - Asynchronous I/O (`asyncio`, `asyncio.Semaphore`)
-  - In-memory time-to-live (TTL) caching
-
----
-
-## 8. Installation & Setup
+## ⚡ Installation & Setup
 
 ### Prerequisites
-- Python 3.10 or higher
-- Node.js 18 or higher
+- Python 3.10+
+- Node.js 18+
 - Git
 
-### 1. Backend Setup
+---
 
+### 1. Clone the Repository
 ```bash
-# Navigate to the backend directory
+git clone <repo_url>
+cd ai-weather-nowcasting
+```
+
+### 2. Backend Setup
+```bash
+# Navigate to backend directory
 cd backend
 
-# Create and activate virtual environment
+# Create virtual environment
 python -m venv venv
-# On Windows:
+
+# Activate virtual environment
+# Windows (PowerShell):
 .\venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
+# Linux / macOS:
+# source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+```
 
-# Run the backend server
+### 3. Run Backend Server
+```bash
 uvicorn main:app --reload --port 8000
 ```
-Backend will be live at `http://127.0.0.1:8000` (API documentation: `http://127.0.0.1:8000/docs`).
+- API is running at: `http://127.0.0.1:8000`
+- Interactive Swagger docs: `http://127.0.0.1:8000/docs`
 
-### 2. Frontend Setup
-
+### 4. Frontend Setup
 ```bash
 # Open a new terminal and navigate to frontend directory
 cd frontend/frontend-react
@@ -175,67 +176,81 @@ npm install
 # Start development server
 npm run dev
 ```
-Frontend will be accessible at `http://localhost:5173`.
+- Frontend will be accessible at: `http://localhost:5173`
 
 ---
 
-## 9. API Endpoints
+## 🔑 Environment Variables
+
+The project uses a `.env` file located in the project root or `backend/` directory to store sensitive credentials:
+
+```ini
+# OpenWeather API Key for live atmospheric telemetry
+OPENWEATHER_API_KEY=your_api_key_here
+```
+
+> **Note:**
+> - The `.env` file is excluded from version control via `.gitignore` to prevent secret leakage.
+> - A reference template `.env.example` is provided in the repository.
+> - **Fallback Mode:** If no API key is supplied, the system automatically runs on its built-in climatological fallback engine without errors.
+
+---
+
+## 📊 API Endpoints
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/alerts` | Returns precomputed summary (`total`, `high`, `moderate`, `low`) and deduplicated active weather alerts. Accepts `limit` query param (default: 380). |
-| `GET` | `/zones` | Returns monitored zone telemetry and risk statuses across Indian geographical nodes. |
-| `GET` | `/dashboard` | Unified feed providing synchronized metrics and layer coordinates for map rendering. |
-| `POST` | `/predict` | On-demand single-location inference taking coordinates (`lat`, `lon`) and location name to compute real-time risk scores. |
-| `POST` | `/batch_predict` | Asynchronous batch inference for custom coordinate arrays. |
-| `GET` | `/health` | System health check and model initialization status. |
+| `GET` | `/health` | Verifies service health, active ML model, and system status. |
+| `POST` | `/predict` | Computes on-demand nowcast prediction and alert for a specified city or coordinate pair. |
+| `GET` | `/alerts` | Returns precomputed risk summaries (`total`, `high`, `moderate`, `low`) and active warnings. |
+| `GET` | `/zones?limit=` | Fetches real-time status and telemetry for multiple monitored Indian zones (supports limit). |
+| `GET` | `/nowcast?city=` | Instant weather query and nowcast inference for a specific target city. |
 
 ---
 
-## 10. Performance & Scaling
+## 🎨 UI Features
 
-- **380+ Hyper-Local Nodes**: Capable of evaluating 380+ micro-zones across India in parallel without API rate exhaustion.
-- **Asynchronous Concurrency Control**: Uses `asyncio.Semaphore` (capped at 20-25 workers) to prevent socket starvation and maintain smooth burst handling.
-- **In-Memory Cache (TTL)**: Thread-safe caching retains computed nowcasts for 380 seconds, ensuring repeat queries resolve in under 50ms and counts never flicker on refresh.
-- **Optimized Leaflet Map Rendering**: Utilizes cluster chunking and viewport-based marker culling to ensure smooth 60fps pan/zoom performance even on mobile hardware.
-
----
-
-## 11. UI/UX Highlights
-
-- **Clean Dashboard**: Data-dense yet uncluttered dashboard inspired by Linear and Stripe design systems.
-- **Seamless Theme Toggling**: Integrated Dark and Light themes with persistent state and anti-flicker pre-hydration.
-- **Geospatial Risk Clustering**: Smart marker aggregation groups nearby nodes and expands smoothly on click.
-- **Micro-Interactions**: Smooth scale feedback, subtle hover highlights, and intuitive collapsible alert panels.
-- **Zero Layout Shifts**: Engineered with strict height constraints and responsive flex structures to eliminate visual stutter.
+- **Clean Command Dashboard:** Data-dense, uncluttered layout showing real-time atmospheric threat posture at a glance.
+- **Geospatial Map Visualization:** Interactive Leaflet map with color-coded circular markers (Green: Low, Orange: Moderate, Red: High) and smooth camera transitions.
+- **Actionable Alert Cards:** Highlighted threat notifications containing specific emergency recommendations rather than ambiguous numbers.
+- **Interactive Micro-Interactions:** Subtle hover states, animated risk badges, and glowing selection indicators.
+- **Persistent Dark / Light Theme:** Instant toggling between dark and light modes with zero-flicker reload and local storage state persistence.
 
 ---
 
-## 12. Future Improvements
+## ⚡ Performance Optimizations
 
-- **Deep Learning Nowcasting**: Integration of ConvLSTM and U-Net models for radar precipitation echo extrapolation.
-- **Model Explainability (SHAP / LIME)**: Transparent feature attribution dashboards explaining atmospheric drivers to meteorologists.
-- **INSAT-3D & Radar Fusion**: Ingestion of live satellite imagery and Doppler Weather Radar (DWR) composite grids from IMD.
-- **Automated Multi-Channel Alerting**: Webhooks, SMS emergency broadcasts, and WhatsApp notifications for local disaster management cells.
-
----
-
-## 13. Use Cases
-
-- **Disaster Management Authorities (NDRF / SDRF)**: Pre-positioning rescue personnel and heavy machinery in high-risk zones hours ahead of flooding.
-- **Municipal Corporations & Smart Cities**: Managing storm-water drainage gates, proactive traffic diversions, and public advisory announcements.
-- **Agriculture & Supply Chain Logistics**: Protecting perishable agricultural logistics and rerouting transport fleets away from active convective paths.
-- **Aviation & Maritime Operations**: Early tactical awareness for localized airfield downdrafts and coastal storm surge risks.
+- **Asynchronous API Calls:** Non-blocking network I/O using `httpx.AsyncClient` enables rapid data acquisition.
+- **Batch Processing:** Concurrent processing of hundreds of geographic zones in parallel.
+- **Smart In-Memory Caching:** 300-second TTL cache eliminates redundant external calls, keeping repeat query latency under 50ms.
+- **Concurrency Control:** Managed with `asyncio.Semaphore` to protect upstream API quotas and prevent socket starvation.
 
 ---
 
-## 14. Conclusion
+## 🔒 Security
 
-The **AI Weather Nowcasting System** transforms raw meteorological telemetry into actionable, hyper-local life-saving intelligence. By uniting predictive machine learning, high-concurrency API engineering, and responsive geospatial visualization, it provides emergency planners, municipal administrators, and citizens with the advance warning needed to mitigate weather disasters before they strike.
+- **Environment-Isolated Secrets:** External API credentials are kept strictly in `.env` files and loaded via `python-dotenv`.
+- **Git Protection:** `.gitignore` rules prevent accidentally committing `.env`, virtual environments (`venv/`), build artifacts, or secret keys.
+- **Input Validation:** Strict Pydantic models validate incoming API payloads, types, and coordinate ranges.
 
 ---
 
-## 15. Author
+## 📈 Future Improvements
 
-Developed by **Rakesh Dinda**  
-*AI Weather Nowcasting System — Hyper-Local Early Warning for a Safer Tomorrow*
+- **SHAP / LIME Explainability:** Integration of feature attribution graphs so meteorologists can see exact atmospheric drivers behind predictions.
+- **External Risk Signal Fusion:** Incorporating river gauge levels, civic drainage topography, and urban population density.
+- **Multi-Channel Alert Dispatch:** Automated push notifications, emergency SMS broadcasts, and webhook integrations for disaster relief cells.
+- **Doppler Radar & Satellite Overlay:** Live integration of IMD Doppler radar reflectivity feeds directly onto the map visualizer.
+
+---
+
+## 👥 Team
+
+- **Rakesh Dinda** - Project Lead & Full-Stack / AI Architect
+- *Open for Open-Source Contributors & Hackathon Collaborators*
+
+---
+
+## 🏁 Conclusion
+
+The **AI Weather Nowcasting & Early Warning System** delivers an end-to-end, production-grade solution to the challenge of unpredictable micro-weather disasters. By uniting real-time API telemetry, automated atmospheric feature engineering, calibrated machine learning, and an intuitive geospatial dashboard, the platform turns raw weather data into decisive, life-saving early warnings. Built with high concurrency, fault-tolerant fallbacks, and a modern design system, it stands as an impactful, scalable, and hackathon-winning platform ready for real-world deployment.
